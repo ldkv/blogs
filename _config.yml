@@ -32,7 +32,7 @@ social:
   # Change to your full name.
   # It will be displayed as the default author of the posts and the copyright owner in the Footer
   name: Dao Khanh Vu LE
-  email: admin@ledkvu@.com # change to your email address
+  email: admin@ledkvu.com # change to your email address
   links:
     # The first element serves as the copyright owner's link
     - https://github.com/ldkv # change to your GitHub homepage
