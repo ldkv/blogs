@@ -27,7 +27,7 @@ The template layout meet all my expectations above, it is well documented with m
 
 To get started, I found a [Medium post](https://medium.com/@svenvanginkel/build-a-blog-with-jekyll-chirpy-on-cloudflare-pages-f204bc538af9) with step-by-step guide to deploy the template on Cloudflare Pages, which is exactly what I was looking for.
 
-After the first successful deployment using the guide, some more customizations are necessary to make the page more personal and to my liking. 
+After the first successful deployment using the guide, some more customizations are necessary to make the page more personal and to my liking.
 
 Below are the steps I took to customize the template, I won't go into details here since most of them are well-documented, but I will provide the links to the official documentation for each step.
 
@@ -45,7 +45,7 @@ The favicons [can also be customized](https://chirpy.cotes.page/posts/customize-
 
 ### Enable post comments with giscus
 
-The template supports comments system with [giscus](https://giscus.app/), which is a lightweight comments system based on GitHub discussions. 
+The template supports comments system with [giscus](https://giscus.app/), which is a lightweight comments system based on GitHub discussions.
 
 To enable giscus, first follow the [official guide](https://giscus.app) to enable the extension in your Github repository.
 
@@ -63,12 +63,11 @@ It also allows for easier customization of the theme and its layout.
 
 To locate the theme files, use the command:
 
-
 ```shell
 bundle info --path jekyll-theme-chirpy
 ```
 
-Then copy all 5 folders _data, _layouts, _includes, _sass, assets to your repository, overwriting the existing files.
+Then copy all 5 folders \_data, \_layouts, \_includes, \_sass, assets to your repository, overwriting the existing files.
 
 ### Production and preview builds
 

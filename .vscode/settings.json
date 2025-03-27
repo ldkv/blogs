@@ -1,20 +1,20 @@
 {
   // Prettier
   "editor.defaultFormatter": "esbenp.prettier-vscode",
-  "editor.formatOnSave": true,
+  "editor.formatOnSave": false,
   // Shopify Liquid
   "files.associations": {
     "*.html": "liquid"
   },
   "[markdown]": {
-    "editor.defaultFormatter": "yzhang.markdown-all-in-one"
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   // Formatter
   "[html][liquid]": {
     "editor.defaultFormatter": "Shopify.theme-check-vscode"
   },
   "[shellscript]": {
-    "editor.defaultFormatter": "mkhl.shfmt"
+    "editor.defaultFormatter": "foxundermoon.shell-format"
   },
   // Disable vscode built-in stylelint
   "css.validate": false,
