@@ -113,26 +113,194 @@ queryset = People.objects.filter(TupleIn(Tuple("first_name", "last_name"), input
 
 The generated SQL query should be identical to the desired query.
 
-## Benchmarks
+### To bench or not to bench
 
-All solutions generate the same SQL query, so theoretically the performance should be identical. However, in real-world scenarios, would we see any difference?
+All solutions generate the same or equivalent SQL query, so theoretically the performance should be roughly identical, right? However, in real-world scenarios, would we see any difference?
 
 <details>
   <summary><strong>TL;DR: SPOILER WARNING</strong></summary>
 
 The performance is, in fact, practically the same. So, is this post pointless?
 
-Personally I am the kind of person who doesn't believe in pure theory, without verifying the fact by myself. The experiment is not totally useless either, since it helps to confirm the theory, and I do enjoy the process of building the benchmark and running it from different angles.
+Personally I am the kind of person who doesn't believe in pure theory, without verifying the fact by myself. The experiment is not totally in vain either, since it helps to confirm the theory, and I do enjoy the process of building the benchmark and running it from different angles.
 
-If you are interested in the building process of the benchmark, please continue reading. Otherwise, you can skip directly to the [Final thoughts](#final-thoughts) at the end.
+If you are interested in the making process of the benchmark, please continue reading. Be aware, the following section is very code-heavy.
+
+Otherwise, you can skip directly to the [Final thoughts](#final-thoughts) at the end.
 
 </details>
 
+## Benchmark preparations
+
 ### Setup
 
-To compare the performance of the different solutions, we will use the following setup:
+The setup doesn't really matter as far as we are running the same tests on the exact same environment. However, for the sake of completeness, here are the details:
 
--   PostgreSQL 16
+-   PostgreSQL 15
 -   Django 5.2
--   Python 3.11
--   MacBook Pro M4 14" 2024
+-   Python 3.13
+-   OS: WSL2 on Windows 11, limited to 4 CPU cores and 8GB of RAM
+
+### Test scenarios
+
+We will test the performance with the following variables:
+
+-   Number of rows in the table: 5 / 10 / 20 million
+-   Number of tuples in the input list: 100 / 200 / 1000
+-   Number of columns to filter on: 2 / 3 / 4
+-   Number of runs for each scenario: 100
+
+Only [solution 1](#1-build-the-filter-conditions-manually) and [solution 3](#3-hidden-feature-in-django-52) will be tested, since solution 2 generates the same query as solution 3.
+
+### Generate dummy data
+
+We will generate a distinct table with the required number of rows. To facilitate the generation and the code writing, we will first define an abstract base model:
+
+```python
+from django.db import models
+
+class ExperimentBase(models.Model):
+    first_name = models.CharField(max_length=255, db_index=True)
+    last_name = models.CharField(max_length=255, db_index=True)
+    age = models.IntegerField(db_index=True)
+    email = models.EmailField(max_length=255, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["first_name", "last_name"], name="%(class)s_name_index"),
+        ]
+        abstract = True
+
+    # Must be set by subclass
+    _max_count = -1
+
+    @classmethod
+    def submodels_by_size(cls) -> dict[str, type["ExperimentBase"]]:
+        submodels = {}
+        for submodel in cls.__subclasses__():
+            if submodel._max_count == -1:
+                continue
+            key = f"{submodel._max_count // 1_000_000}M"
+            submodels[key] = submodel
+
+        return submodels
+```
+
+The `_max_count` class variable is used to determine the number of rows to generate, while the `submodels_by_size` method returns a dictionary of all submodels by their maximum number of rows, which will simplify the experiment code later on.
+
+Create a table with each required number of rows becomes trivial by subclassing the base model:
+
+```python
+class Experiment5M(ExperimentBase):
+    _max_count = 5_000_000
+
+class Experiment10M(ExperimentBase):
+    _max_count = 10_000_000
+
+class Experiment20M(ExperimentBase):
+    _max_count = 20_000_000
+```
+
+Needless to say, the `makemigrations` and `migrate` commands will be necessary to create the tables in the database.
+
+To create dummy data, we will use the `Faker` library:
+
+```python
+from faker import Faker
+
+class ExperimentBase:
+
+    ...
+
+    @classmethod
+    def bulk_generate_rows(cls, bulk_size: int = 10_000) -> None:
+        current_count = cls.objects.count()
+        number_to_create = cls._max_count - current_count
+        fake = Faker()
+        while number_to_create > 0:
+            bulk_size = min(number_to_create, bulk_size)
+            cls.objects.bulk_create(
+                [
+                    cls(
+                        first_name=fake.first_name(),
+                        last_name=fake.last_name(),
+                        age=fake.random_int(min=18, max=90),
+                        email=fake.email(),
+                    )
+                    for _ in range(bulk_size)
+                ]
+            )
+            number_to_create -= bulk_size
+            logger.info(f"Number to create remaining: {number_to_create}")
+```
+
+The `bulk_generate_rows` method will generate rows until the table reach its maximum number of rows.
+
+To execute the generation, we will use a simple management command that will loop through all the submodels and call the `bulk_generate_rows` method.
+
+```python
+# experiments/management/commands/generate_rows.py
+
+from django.core.management.base import BaseCommand
+
+from experiments.models import DEFAULT_BULK_SIZE, ExperimentBase
+
+
+class Command(BaseCommand):
+    help = "Generate rows. Example: python manage.py generate_rows --bulk-size 100000"
+
+    def add_arguments(self, parser):
+        parser.add_argument("--bulk-size", type=int, default=10_000)
+
+    def handle(self, *args, **options):
+        bulk_size = options.get("bulk_size")
+        for experiment_table in ExperimentBase.submodels_by_size().values():
+            experiment_table.bulk_generate_rows(bulk_size=bulk_size)
+
+```
+
+This implementation allows to interrupt and resume the generation at any time, which is useful since the process will take quite a while to complete (around 10 minutes for 5 million rows on my machine).
+
+It is possible to "cheat" the process by using pure SQL to duplicate the table from an existing one, for example:
+
+```sql
+INSERT INTO experiments_experiment10m (first_name, last_name, age, email, created_at)
+SELECT first_name,
+    last_name,
+    age,
+    email,
+    '2025-04-30 00:00:00+00'
+FROM experiments_experiment5m;
+```
+
+### Generate list of input tuples
+
+PostgreSQL uses an internal caching mechanism ([shared buffers](https://www.educba.com/postgresql-caching/)) for each query, which means the same query inputs will be much faster on subsequent runs.
+
+To minimize the impact of this mechanism on the results, we will have to generate a new list of input tuples for each test / run.
+
+Additionally, to simulate a real-world scenario, we will generate a ratio of `90%` real inputs (existing data from the table) and `10%` fake inputs. The real inputs will be selected from a random range of the table, and the fake inputs will be generated randomly with `Faker`.
+
+The following method will be used to generate input tuples for `first_name` and `last_name` columns:
+
+```python
+class ExperimentBase:
+
+    ...
+
+    @classmethod
+    def generate_inputs(cls, number_of_inputs: int, fake_percent: int = 10) -> list[tuple[str, str]]:
+        # Generate fake inputs
+        columns = ["first_name", "last_name"]
+        number_fake_inputs = int(number_of_inputs * fake_percent / 100)
+        fake = Faker()
+        fake_inputs = [(fake.first_name(), fake.last_name()) for _ in range(number_fake_inputs)]
+
+        # Get inputs from the database with random offset
+        number_real_inputs = number_of_inputs - number_fake_inputs
+        random_index = random.randint(0, cls._max_count - number_real_inputs)
+        real_inputs = cls.objects.values_list(*columns)[random_index : random_index + number_real_inputs]
+
+        return list(real_inputs) + list(fake_inputs)
+```
