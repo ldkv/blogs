@@ -103,7 +103,7 @@ Django 5.2 was released recently and introduced the long-awaited support for [Co
 
 Be aware that this internal module has not been made public in the Django API or documentation yet. This means that it might not be stable and is subject to change in future versions of Django, so **use it at your own risk**.
 
-The usage is straightforward and simple:
+The usage is straightforward:
 
 ```python
 from django.db.models.fields.tuple_lookups import Tuple, TupleIn
@@ -112,3 +112,27 @@ queryset = People.objects.filter(TupleIn(Tuple("first_name", "last_name"), input
 ```
 
 The generated SQL query should be identical to the desired query.
+
+## Benchmarks
+
+All solutions generate the same SQL query, so theoretically the performance should be identical. However, in real-world scenarios, would we see any difference?
+
+<details>
+  <summary><strong>TL;DR: SPOILER WARNING</strong></summary>
+
+The performance is, in fact, practically the same. So, is this post pointless?
+
+Personally I am the kind of person who doesn't believe in pure theory, without verifying the fact by myself. The experiment is not totally useless either, since it helps to confirm the theory, and I do enjoy the process of building the benchmark and running it from different angles.
+
+If you are interested in the building process of the benchmark, please continue reading. Otherwise, you can skip directly to the [Final thoughts](#final-thoughts) at the end.
+
+</details>
+
+### Setup
+
+To compare the performance of the different solutions, we will use the following setup:
+
+-   PostgreSQL 16
+-   Django 5.2
+-   Python 3.11
+-   MacBook Pro M4 14" 2024
