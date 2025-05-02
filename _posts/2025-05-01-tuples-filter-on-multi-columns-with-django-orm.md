@@ -117,10 +117,10 @@ The generated SQL query should be identical to the desired query.
 
 All solutions generate the same or equivalent SQL query, so theoretically the performance should be roughly identical, right? However, in real-world scenarios, would we see any difference?
 
-<details>
-  <summary><strong>TL;DR: SPOILER WARNING</strong></summary>
+> **TL;DR:** The performance is, in fact, practically the same.
+{: .prompt-info }
 
-The performance is, in fact, practically the same. So, is this post pointless?
+So, is this post pointless?
 
 Personally I am the kind of person who doesn't believe in pure theory, without verifying the fact by myself. The experiment is not totally in vain either, since it helps to confirm the theory, and I do enjoy the process of building the benchmark and running it from different angles.
 
@@ -128,18 +128,18 @@ If you are interested in the making process of the benchmark, please continue re
 
 Otherwise, you can skip directly to the [Final thoughts](#final-thoughts) at the end.
 
-</details>
-
 ## Benchmark preparations
 
 ### Setup
 
-The setup doesn't really matter as far as we are running the same tests on the exact same environment. However, for the sake of completeness, here are the details:
+For reference, here are the details of the environment used for the benchmark:
 
--   PostgreSQL 15
+-   OS: `debian` on WSL2 on Windows 11, limited to 4 CPU cores and 8GB of RAM
+-   PostgreSQL 15: installed directly into the WSL2 instance instead of using Docker container
 -   Django 5.2
 -   Python 3.13
--   OS: WSL2 on Windows 11, limited to 4 CPU cores and 8GB of RAM
+
+The setup doesn't really matter as far as we are running the same tests on the exact same environment.
 
 ### Test scenarios
 
@@ -152,9 +152,7 @@ We will test the performance with the following variables:
 
 Only [solution 1](#1-build-the-filter-conditions-manually) and [solution 3](#3-hidden-feature-in-django-52) will be tested, since solution 2 generates the same query as solution 3.
 
-### Generate dummy data
-
-We will generate a distinct table with the required number of rows. To facilitate the generation and the code writing, we will first define an abstract base model:
+The base model to be tested will be the following:
 
 ```python
 from django.db import models
@@ -187,9 +185,13 @@ class ExperimentBase(models.Model):
         return submodels
 ```
 
+The columns' indexes are varied to simulate different use cases.
+
 The `_max_count` class variable is used to determine the number of rows to generate, while the `submodels_by_size` method returns a dictionary of all submodels by their maximum number of rows, which will simplify the experiment code later on.
 
-Create a table with each required number of rows becomes trivial by subclassing the base model:
+### Generate dummy data
+
+We will have to create a distinct table with each required number of rows, which is trivial by subclassing the base model:
 
 ```python
 class Experiment5M(ExperimentBase):
@@ -204,7 +206,7 @@ class Experiment20M(ExperimentBase):
 
 Needless to say, the `makemigrations` and `migrate` commands will be necessary to create the tables in the database.
 
-To create dummy data, we will use the `Faker` library:
+To generate dummy data, we will use the `Faker` library:
 
 ```python
 from faker import Faker
@@ -262,7 +264,9 @@ class Command(BaseCommand):
 
 This implementation allows to interrupt and resume the generation at any time, which is useful since the process will take quite a while to complete (around 10 minutes for 5 million rows on my machine).
 
-It is possible to "cheat" the process by using pure SQL to duplicate the table from an existing one, for example:
+
+> It is possible to "cheat" the process by using pure SQL to duplicate the table from an existing one, for example:
+{: .prompt-info }
 
 ```sql
 INSERT INTO experiments_experiment10m (first_name, last_name, age, email, created_at)
