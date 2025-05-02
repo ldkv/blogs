@@ -130,16 +130,16 @@ Otherwise, you can skip directly to the [Final thoughts](#final-thoughts) at the
 
 ## Benchmark preparations
 
-### Setup
+### Environment configurations
 
 For reference, here are the details of the environment used for the benchmark:
 
--   OS: `debian` on WSL2 on Windows 11, limited to 4 CPU cores and 8GB of RAM
--   PostgreSQL 15: installed directly into the WSL2 instance instead of using Docker container
--   Django 5.2
--   Python 3.13
+-   **OS**: `debian` on WSL2 on Windows 11, limited to 4 CPU cores and 8GB of RAM
+-   **PostgreSQL 15**: installed directly into the WSL2 instance instead of using Docker container
+-   **Django 5.2**
+-   **Python 3.13**
 
-The setup doesn't really matter as far as we are running the same tests on the exact same environment.
+The configurations don't really matter as long as we are running the same tests on the exact same environment.
 
 ### Test scenarios
 
@@ -149,8 +149,6 @@ We will test the performance with the following variables:
 -   Number of tuples in the input list: 100 / 200 / 1000
 -   Number of columns to filter on: 2 / 3 / 4
 -   Number of runs for each scenario: 100
-
-Only [solution 1](#1-build-the-filter-conditions-manually) and [solution 3](#3-hidden-feature-in-django-52) will be tested, since solution 2 generates the same query as solution 3.
 
 The base model to be tested will be the following:
 
@@ -183,15 +181,38 @@ class ExperimentBase(models.Model):
             submodels[key] = submodel
 
         return submodels
+
+    @classmethod
+    def experiment_methods(cls) -> list[Callable]:
+        return [
+            cls.filter_rows_with_in_tuples,
+            cls.filter_rows_with_conditions,
+        ]
+
+    @classmethod
+    def filter_rows_with_conditions(cls, inputs: list[tuple], input_columns: list[str]) -> float:
+        conditions = Q()
+        for input_tuple in inputs:
+            conditions |= Q(**dict(zip(input_columns, input_tuple, strict=True)))
+
+        query = cls.objects.filter(conditions)
+        return query.aggregate(Avg("age"))["age__avg"]
+
+    @classmethod
+    def filter_rows_with_in_tuples(cls, inputs: list[tuple], input_columns: list[str]) -> float:
+        query = cls.objects.filter(TupleIn(Tuple(*input_columns), inputs))
+        return query.aggregate(Avg("age"))["age__avg"]
 ```
 
-The columns' indexes are varied to simulate different use cases.
+The columns' indexes are varied to simulate different scenarios.
 
-The `_max_count` class variable is used to determine the number of rows to generate, while the `submodels_by_size` method returns a dictionary of all submodels by their maximum number of rows, which will simplify the experiment code later on.
+The `_max_count` class variable is used to determine the number of rows to generate on each submodel, while the `submodels_by_size` method returns a dictionary of all submodels by their maximum number of rows, which will simplify the experiment code later on.
+
+Only [solution 1](#1-build-the-filter-conditions-manually) and [solution 3](#3-hidden-feature-in-django-52) will be tested, since solution 2 generates the same query as solution 3.
 
 ### Generate dummy data
 
-We will have to create a distinct table with each required number of rows, which is trivial by subclassing the base model:
+We will have to create a distinct table with each required number of rows, which is trivial by subclassing the base model above:
 
 ```python
 class Experiment5M(ExperimentBase):
@@ -264,7 +285,6 @@ class Command(BaseCommand):
 
 This implementation allows to interrupt and resume the generation at any time, which is useful since the process will take quite a while to complete (around 10 minutes for 5 million rows on my machine).
 
-
 > It is possible to "cheat" the process by using pure SQL to duplicate the table from an existing one, for example:
 {: .prompt-info }
 
@@ -284,9 +304,9 @@ PostgreSQL uses an internal caching mechanism ([shared buffers](https://www.educ
 
 To minimize the impact of this mechanism on the results, we will have to generate a new list of input tuples for each test / run.
 
-Additionally, to simulate a real-world scenario, we will generate a ratio of `90%` real inputs (existing data from the table) and `10%` fake inputs. The real inputs will be selected from a random range of the table, and the fake inputs will be generated randomly with `Faker`.
+Additionally, to simulate real-world scenario, we will generate a ratio of `90%` real inputs (existing data from the table) and `10%` fake inputs. The real inputs will be selected from a random range of the table, and the fake inputs will be generated randomly with `Faker`.
 
-The following method will be used to generate input tuples for `first_name` and `last_name` columns:
+The following method will generate input tuples for `first_name` and `last_name` columns:
 
 ```python
 class ExperimentBase:
