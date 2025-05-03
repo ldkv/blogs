@@ -115,14 +115,16 @@ The generated SQL query should be identical to the desired query.
 
 ### To bench or not to bench
 
-All solutions generate the same or equivalent SQL query, so theoretically the performance should be roughly identical, right? However, in real-world scenarios, would we see any difference?
+At this point, the first question that comes to mind is which solution should we use? Naturally we would want the best performing solution. However all solutions generate the same or equivalent SQL query, so theoretically the performance should be roughly identical. In real-world scenarios, would we see any difference?
+
+The only way to know is to run some benchmarks.
 
 > **TL;DR:** The performance is, in fact, practically the same.
 {: .prompt-info }
 
 So, is this post pointless?
 
-Personally I am the kind of person who doesn't believe in pure theory, without verifying the fact by myself. The experiment is not totally in vain either, since it helps to confirm the theory, and I do enjoy the process of building the benchmark and running it from different angles.
+Personally I don't believe in pure theory without verifying the fact by myself. The experiment is not totally in vain either, since it helps to confirm the theory, and I do enjoy the process of building the benchmark and running it from different angles.
 
 If you are interested in the making process of the benchmark, please continue reading. Be aware, the following section is very code-heavy.
 
@@ -136,19 +138,13 @@ For reference, here are the details of the environment used for the benchmark:
 
 -   **OS**: `debian` on WSL2 on Windows 11, limited to 4 CPU cores and 8GB of RAM
 -   **PostgreSQL 15**: installed directly into the WSL2 instance instead of using Docker container
--   **Django 5.2**
--   **Python 3.13**
+-   **Django 5.2**: required for solution 3
+-   **psycopg3**: driver interface for PostgreSQL
+-   **Python 3.13**: because why not?
 
 The configurations don't really matter as long as we are running the same tests on the exact same environment.
 
-### Test scenarios
-
-We will test the performance with the following variables:
-
--   Number of rows in the table: 5 / 10 / 20 million
--   Number of tuples in the input list: 100 / 200 / 1000
--   Number of columns to filter on: 2 / 3 / 4
--   Number of runs for each scenario: 100
+### Test model
 
 The base model to be tested will be the following:
 
@@ -208,7 +204,7 @@ The columns' indexes are varied to simulate different scenarios.
 
 The `_max_count` class variable is used to determine the number of rows to generate on each submodel, while the `submodels_by_size` method returns a dictionary of all submodels by their maximum number of rows, which will simplify the experiment code later on.
 
-Only [solution 1](#1-build-the-filter-conditions-manually) and [solution 3](#3-hidden-feature-in-django-52) will be tested, since solution 2 generates the same query as solution 3.
+Only [solution 1](#1-build-the-filter-conditions-manually) (method `filter_rows_with_conditions`) and [solution 3](#3-hidden-feature-in-django-52) (method `filter_rows_with_in_tuples`) will be tested, since solution 2 generates the same query as solution 3.
 
 ### Generate dummy data
 
@@ -232,7 +228,7 @@ To generate dummy data, we will use the `Faker` library:
 ```python
 from faker import Faker
 
-class ExperimentBase:
+class ExperimentBase(models.Model):
 
     ...
 
@@ -309,7 +305,7 @@ Additionally, to simulate real-world scenario, we will generate a ratio of `90%`
 The following method will generate input tuples for `first_name` and `last_name` columns:
 
 ```python
-class ExperimentBase:
+class ExperimentBase(models.Model):
 
     ...
 
@@ -328,3 +324,48 @@ class ExperimentBase:
 
         return list(real_inputs) + list(fake_inputs)
 ```
+
+Full implementation of the `ExperimentBase` class can be found [here](https://github.com/ldkv/django-experiments/blob/main/experiments/models.py).
+
+### Command to run the experiments
+
+The last step is to run the experiments. For this, we will create a management command that will execute the following steps:
+
+-   Loop through the 2 experiment methods
+-   Loop through each submodel
+-   Generate the inputs with the required number of tuples and columns given from the parameters
+-   Call the experiment method with the generated inputs
+-   Calculate the average duration after 200 runs
+-   Save the average duration per submodel per experiment method to a JSON file
+
+![routines](/assets/img/posts/2025-05-01-tuples-filter-on-multi-columns-with-django-orm/experiments-flow.png)
+
+The implementation code of the command can be found [here](https://github.com/ldkv/django-experiments/blob/main/experiments/management/commands/run_filter_experiments.py).
+
+## Benchmark results
+
+### Test scenarios
+
+We will run the experiments with the following variables:
+
+-   Number of runs for each scenario: 200
+-   Number of rows in the table: 5 / 10 / 20 / 50 million
+-   Number of columns to filter on: 2 / 3 / 4
+-   Number of tuples in the input list: 100 / 200 / 500 / 1000
+
+Each following section will show the results for a specific input size.
+
+### Input size: 100 tuples
+
+![100 tuples](/assets/img/posts/2025-05-01-tuples-filter-on-multi-columns-with-django-orm/plot_experiments_200runs_10fake_100size_2cols.png)
+_Filter on 2 columns_
+
+![100 tuples](/assets/img/posts/2025-05-01-tuples-filter-on-multi-columns-with-django-orm/plot_experiments_200runs_10fake_100size_3cols.png)
+_Filter on 3 columns_
+
+![100 tuples](/assets/img/posts/2025-05-01-tuples-filter-on-multi-columns-with-django-orm/plot_experiments_200runs_10fake_100size_4cols.png)
+_Filter on 4 columns_
+
+## Final thoughts
+
+The performance is, in fact, practically the same.
