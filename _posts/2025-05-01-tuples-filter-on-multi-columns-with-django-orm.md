@@ -357,6 +357,8 @@ Each following section will show the results for a specific input size (100 / 20
 
 ### Input size: 100 tuples
 
+![100 tuples](/assets/img/posts/2025-05-01-tuples-filter-on-multi-columns-with-django-orm/performance_comparison_input100.png)
+
 ![100 tuples](/assets/img/posts/2025-05-01-tuples-filter-on-multi-columns-with-django-orm/plot_experiments_200runs_10fake_100size_2cols.png)
 _Filter on 2 columns_
 
