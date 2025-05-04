@@ -120,7 +120,7 @@ At this point, the first question that comes to mind is which solution should we
 The only way to know is to run some benchmarks.
 
 > **TL;DR:** The performance is, in fact, practically the same.
-{: .prompt-info }
+> {: .prompt-info }
 
 So, is this post pointless?
 
@@ -282,7 +282,7 @@ class Command(BaseCommand):
 This implementation allows to interrupt and resume the generation at any time, which is useful since the process will take quite a while to complete (around 10 minutes for 5 million rows on my machine).
 
 > It is possible to "cheat" the process by using pure SQL to duplicate the table from an existing one, for example:
-{: .prompt-info }
+> {: .prompt-info }
 
 ```sql
 INSERT INTO experiments_experiment10m (first_name, last_name, age, email, created_at)
@@ -365,6 +365,33 @@ _Filter on 3 columns_
 
 ![100 tuples](/assets/img/posts/2025-05-01-tuples-filter-on-multi-columns-with-django-orm/plot_experiments_200runs_10fake_100size_4cols.png)
 _Filter on 4 columns_
+
+### Input size: 200 tuples
+
+![200 tuples](/assets/img/posts/2025-05-01-tuples-filter-on-multi-columns-with-django-orm/plot_experiments_200runs_10fake_200size_2cols.png)
+_Filter on 2 columns_
+
+![200 tuples](/assets/img/posts/2025-05-01-tuples-filter-on-multi-columns-with-django-orm/plot_experiments_200runs_10fake_200size_3cols.png)
+_Filter on 3 columns_
+
+![200 tuples](/assets/img/posts/2025-05-01-tuples-filter-on-multi-columns-with-django-orm/plot_experiments_200runs_10fake_200size_4cols.png)
+_Filter on 4 columns_
+
+### Input size: 500 tuples
+
+![500 tuples](/assets/img/posts/2025-05-01-tuples-filter-on-multi-columns-with-django-orm/plot_experiments_200runs_10fake_500size_2cols.png)
+_Filter on 2 columns_
+
+![500 tuples](/assets/img/posts/2025-05-01-tuples-filter-on-multi-columns-with-django-orm/plot_experiments_200runs_10fake_500size_3cols.png)
+_Filter on 3 columns_
+
+![500 tuples](/assets/img/posts/2025-05-01-tuples-filter-on-multi-columns-with-django-orm/plot_experiments_200runs_10fake_500size_4cols.png)
+_Filter on 4 columns_
+
+### Input size: 1000 tuples
+
+![1000 tuples](/assets/img/posts/2025-05-01-tuples-filter-on-multi-columns-with-django-orm/plot_experiments_200runs_10fake_1000size_2cols.png)
+_Filter on 2 columns_
 
 ## Final thoughts
 
