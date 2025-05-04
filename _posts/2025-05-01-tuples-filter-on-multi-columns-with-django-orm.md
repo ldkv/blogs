@@ -353,7 +353,7 @@ We will run the experiments with the following variables:
 -   Number of columns to filter on: 2 / 3 / 4
 -   Number of tuples in the input list: 100 / 200 / 500 / 1000
 
-Each following section will show the results for a specific input size.
+Each following section will show the results for a specific input size (100 / 200 / 500 / 1000 tuples).
 
 ### Input size: 100 tuples
 
@@ -392,6 +392,55 @@ _Filter on 4 columns_
 
 ![1000 tuples](/assets/img/posts/2025-05-01-tuples-filter-on-multi-columns-with-django-orm/plot_experiments_200runs_10fake_1000size_2cols.png)
 _Filter on 2 columns_
+
+# Experiment Results
+
+## Input Size: 100
+
+| Columns        | 2                                      |                                        |                                         |                                         | 3                                      |                                        |                                         |                                         | 4                                      |                                        |                                         |                                         |
+| -------------- | -------------------------------------- | -------------------------------------- | --------------------------------------- | --------------------------------------- | -------------------------------------- | -------------------------------------- | --------------------------------------- | --------------------------------------- | -------------------------------------- | -------------------------------------- | --------------------------------------- | --------------------------------------- |
+| **Table size** | 5M                                     | 10M                                    | 20M                                     | 50M                                     | 5M                                     | 10M                                    | 20M                                     | 50M                                     | 5M                                     | 10M                                    | 20M                                     | 50M                                     |
+| **Tuples**     | <span style="color:green">40.37</span> | <span style="color:green">67.86</span> | <span style="color:green">118.68</span> | <span style="color:red">311.60</span>   | <span style="color:green">41.27</span> | <span style="color:green">85.86</span> | <span style="color:green">186.11</span> | <span style="color:green">888.73</span> | <span style="color:green">40.74</span> | <span style="color:green">91.80</span> | <span style="color:green">199.40</span> | <span style="color:green">904.46</span> |
+| **Conditions** | <span style="color:red">47.17</span>   | <span style="color:red">73.25</span>   | <span style="color:red">120.98</span>   | <span style="color:green">271.15</span> | <span style="color:red">39.84</span>   | <span style="color:red">97.60</span>   | <span style="color:red">208.38</span>   | <span style="color:red">894.51</span>   | <span style="color:red">46.88</span>   | <span style="color:red">96.88</span>   | <span style="color:red">205.20</span>   | <span style="color:red">1027.91</span>  |
+| **Gain %**     | <span style="color:red">+16.8%</span>  | <span style="color:red">+7.9%</span>   | <span style="color:red">+1.9%</span>    | <span style="color:green">-13.0%</span> | <span style="color:green">-3.5%</span> | <span style="color:red">+13.7%</span>  | <span style="color:red">+12.0%</span>   | <span style="color:green">-0.6%</span>  | <span style="color:red">+15.1%</span>  | <span style="color:red">+5.5%</span>   | <span style="color:red">+2.9%</span>    | <span style="color:red">+13.6%</span>   |
+
+## Input Size: 200
+
+| Columns        | 2                                      |                                        |                                         |                                         | 3                                      |                                         |                                         |                                          | 4                                      |                                         |                                         |                                          |
+| -------------- | -------------------------------------- | -------------------------------------- | --------------------------------------- | --------------------------------------- | -------------------------------------- | --------------------------------------- | --------------------------------------- | ---------------------------------------- | -------------------------------------- | --------------------------------------- | --------------------------------------- | ---------------------------------------- |
+| **Table size** | 5M                                     | 10M                                    | 20M                                     | 50M                                     | 5M                                     | 10M                                     | 20M                                     | 50M                                      | 5M                                     | 10M                                     | 20M                                     | 50M                                      |
+| **Tuples**     | <span style="color:green">16.00</span> | <span style="color:green">75.47</span> | <span style="color:red">220.84</span>   | <span style="color:red">457.63</span>   | <span style="color:green">78.35</span> | <span style="color:green">183.72</span> | <span style="color:red">515.70</span>   | <span style="color:red">6330.45</span>   | <span style="color:green">79.60</span> | <span style="color:green">183.50</span> | <span style="color:green">537.60</span> | <span style="color:red">6132.87</span>   |
+| **Conditions** | <span style="color:red">47.09</span>   | <span style="color:red">118.30</span>  | <span style="color:green">204.22</span> | <span style="color:green">439.38</span> | <span style="color:red">81.92</span>   | <span style="color:red">187.51</span>   | <span style="color:green">499.34</span> | <span style="color:green">6019.89</span> | <span style="color:red">88.23</span>   | <span style="color:red">204.45</span>   | <span style="color:red">551.31</span>   | <span style="color:green">5892.50</span> |
+| **Gain %**     | <span style="color:red">+194.3%</span> | <span style="color:red">+56.8%</span>  | <span style="color:green">-7.5%</span>  | <span style="color:green">-4.0%</span>  | <span style="color:red">+4.6%</span>   | <span style="color:red">+2.1%</span>    | <span style="color:green">-3.2%</span>  | <span style="color:green">-4.9%</span>   | <span style="color:red">+10.8%</span>  | <span style="color:red">+11.4%</span>   | <span style="color:green">-2.6%</span>  | <span style="color:green">-3.9%</span>   |
+
+## Input Size: 500
+
+| Columns        | 2                                       |                                         |                                         |                                          | 3                                       |                                         |                                          |                                           | 4                                       |                                         |                                          |                                           |
+| -------------- | --------------------------------------- | --------------------------------------- | --------------------------------------- | ---------------------------------------- | --------------------------------------- | --------------------------------------- | ---------------------------------------- | ----------------------------------------- | --------------------------------------- | --------------------------------------- | ---------------------------------------- | ----------------------------------------- |
+| **Table size** | 5M                                      | 10M                                     | 20M                                     | 50M                                      | 5M                                      | 10M                                     | 20M                                      | 50M                                       | 5M                                      | 10M                                     | 20M                                      | 50M                                       |
+| **Tuples**     | <span style="color:red">101.41</span>   | <span style="color:green">445.00</span> | <span style="color:green">874.98</span> | <span style="color:green">1612.65</span> | <span style="color:green">498.82</span> | <span style="color:red">875.42</span>   | <span style="color:red">6873.76</span>   | <span style="color:green">28418.94</span> | <span style="color:green">631.32</span> | <span style="color:green">976.52</span> | <span style="color:green">7014.91</span> | <span style="color:green">30605.16</span> |
+| **Conditions** | <span style="color:green">88.00</span>  | <span style="color:red">453.16</span>   | <span style="color:red">894.18</span>   | <span style="color:red">1813.69</span>   | <span style="color:red">511.50</span>   | <span style="color:green">870.41</span> | <span style="color:green">6816.49</span> | <span style="color:red">28647.71</span>   | <span style="color:red">641.60</span>   | <span style="color:red">987.06</span>   | <span style="color:red">7167.83</span>   | <span style="color:red">31366.24</span>   |
+| **Gain %**     | <span style="color:green">-13.2%</span> | <span style="color:red">+1.8%</span>    | <span style="color:red">+2.2%</span>    | <span style="color:red">+12.5%</span>    | <span style="color:red">+2.5%</span>    | <span style="color:green">-0.6%</span>  | <span style="color:green">-0.8%</span>   | <span style="color:red">+0.8%</span>      | <span style="color:red">+1.6%</span>    | <span style="color:green">-1.1%</span>  | <span style="color:green">-2.2%</span>   | <span style="color:red">+2.5%</span>      |
+
+## Input Size: 1000
+
+| Columns        | 2                                       |                                          |                                          |                                           |
+| -------------- | --------------------------------------- | ---------------------------------------- | ---------------------------------------- | ----------------------------------------- |
+| **Table size** | 5M                                      | 10M                                      | 20M                                      | 50M                                       |
+| **Tuples**     | <span style="color:red">840.32</span>   | <span style="color:green">3151.48</span> | <span style="color:red">5561.74</span>   | <span style="color:red">14645.16</span>   |
+| **Conditions** | <span style="color:green">824.89</span> | <span style="color:red">3291.13</span>   | <span style="color:green">5348.29</span> | <span style="color:green">14064.40</span> |
+| **Gain %**     | <span style="color:green">-1.8%</span>  | <span style="color:red">+4.4%</span>     | <span style="color:green">-3.8%</span>   | <span style="color:green">-4.0%</span>    |
+
+## Notes
+
+-   All experiments were run with 200 runs and 10% fake inputs
+-   Runtime is measured in milliseconds (ms)
+-   Lower runtime values indicate better performance
+-   Only configurations with available data are shown
+-   <span style="color:green">Green</span> indicates better performance
+-   <span style="color:red">Red</span> indicates worse performance
+-   Percentage difference is calculated as (conditions - tuples) / tuples \* 100%
+-   Positive values indicate conditions is faster, negative values indicate tuples is faster
 
 ## Final thoughts
 
