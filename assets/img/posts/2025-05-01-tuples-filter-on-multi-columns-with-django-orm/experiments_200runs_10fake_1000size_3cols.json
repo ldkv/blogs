@@ -1,0 +1,26 @@
+{
+    "input_size": 1000,
+    "columns": [
+        "first_name",
+        "last_name",
+        "age"
+    ],
+    "number_runs": 200,
+    "fake_inputs_percent": 10,
+    "Experiment5M": {
+        "filter_rows_with_in_tuples": 1342.867590110618,
+        "filter_rows_with_conditions": 1350.0625010457588
+    },
+    "Experiment10M": {
+        "filter_rows_with_in_tuples": 15590.670597744756,
+        "filter_rows_with_conditions": 15975.144120210098
+    },
+    "Experiment20M": {
+        "filter_rows_with_in_tuples": 40603.01465995559,
+        "filter_rows_with_conditions": 40385.586659975306
+    },
+    "Experiment50M": {
+        "filter_rows_with_in_tuples": 104363.02579341529,
+        "filter_rows_with_conditions": 109039.78458904028
+    }
+}
