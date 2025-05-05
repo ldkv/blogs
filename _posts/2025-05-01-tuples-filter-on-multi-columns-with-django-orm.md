@@ -275,7 +275,7 @@ class Command(BaseCommand):
 This implementation allows to interrupt and resume the generation at any time, which is useful since the process will take quite a while to complete (around 10 minutes for 5 million rows on my machine).
 
 > It is possible to "cheat" the process by using pure SQL to duplicate the table from an existing one, for example:
-> {: .prompt-info }
+{: .prompt-info }
 
 ```sql
 INSERT INTO experiments_experiment10m (first_name, last_name, age, email, created_at)
@@ -369,7 +369,7 @@ Without further ado, let's dive into the results!
 | **Conditions** | <span style="color:red">47.17</span>    | <span style="color:green">39.84</span> | <span style="color:red">46.88</span>    |     | <span style="color:red">73.25</span>   | <span style="color:red">97.60</span>    | <span style="color:red">96.88</span>   |     | <span style="color:red">120.98</span>   | <span style="color:red">208.38</span>   | <span style="color:red">205.20</span>   |     | <span style="color:green">271.15</span> | <span style="color:red">894.51</span>   | <span style="color:red">1027.91</span>  |     |
 | **Diff %**     | <span style="color:green">+16.8%</span> | <span style="color:red">-3.5%</span>   | <span style="color:green">+15.1%</span> |     | <span style="color:green">+7.9%</span> | <span style="color:green">+13.7%</span> | <span style="color:green">+5.5%</span> |     | <span style="color:green">+1.9%</span>  | <span style="color:green">+12.0%</span> | <span style="color:green">+2.9%</span>  |     | <span style="color:red">-13.0%</span>   | <span style="color:green">+0.6%</span>  | <span style="color:green">+13.6%</span> |     |
 
-![100 tuples](/assets/img/posts/2025-05-01-tuples-filter-on-multi-columns-with-django-orm/performance_comparison_input100.png)
+![100 tuples](/assets/img/posts/2025-05-01-tuples-filter-on-multi-columns-with-django-orm/performance-comparison-input100.png)
 
 ### Input size: 200 tuples
 
@@ -380,7 +380,7 @@ Without further ado, let's dive into the results!
 | **Conditions** | <span style="color:red">47.09</span>     | <span style="color:red">81.92</span>   | <span style="color:red">88.23</span>    |     | <span style="color:red">118.30</span>   | <span style="color:red">187.51</span>   | <span style="color:red">204.45</span>   |     | <span style="color:green">204.22</span> | <span style="color:green">499.34</span> | <span style="color:red">551.31</span>   |     | <span style="color:green">439.38</span> | <span style="color:green">6019.89</span> | <span style="color:green">5892.50</span> |     |
 | **Diff %**     | <span style="color:green">+194.3%</span> | <span style="color:green">+4.6%</span> | <span style="color:green">+10.8%</span> |     | <span style="color:green">+56.8%</span> | <span style="color:green">+2.1%</span>  | <span style="color:green">+11.4%</span> |     | <span style="color:red">-7.5%</span>    | <span style="color:red">-3.2%</span>    | <span style="color:green">+2.6%</span>  |     | <span style="color:red">-4.0%</span>    | <span style="color:red">-4.9%</span>     | <span style="color:red">-3.9%</span>     |     |
 
-![200 tuples](/assets/img/posts/2025-05-01-tuples-filter-on-multi-columns-with-django-orm/performance_comparison_input200.png)
+![200 tuples](/assets/img/posts/2025-05-01-tuples-filter-on-multi-columns-with-django-orm/performance-comparison-input200.png)
 
 ### Input size: 500 tuples
 
@@ -391,7 +391,7 @@ Without further ado, let's dive into the results!
 | **Conditions** | <span style="color:green">88.00</span> | <span style="color:red">511.50</span>   | <span style="color:red">641.60</span>   |     | <span style="color:red">453.16</span>   | <span style="color:green">870.41</span> | <span style="color:red">987.06</span>   |     | <span style="color:red">894.18</span>   | <span style="color:green">6816.49</span> | <span style="color:red">7167.83</span>   |     | <span style="color:red">1813.69</span>   | <span style="color:red">28647.71</span>   | <span style="color:red">31366.24</span>   |     |
 | **Diff %**     | <span style="color:red">-13.2%</span>  | <span style="color:green">+2.5%</span>  | <span style="color:green">+1.6%</span>  |     | <span style="color:green">+1.8%</span>  | <span style="color:red">-0.6%</span>    | <span style="color:green">+1.1%</span>  |     | <span style="color:green">+2.2%</span>  | <span style="color:red">-0.8%</span>     | <span style="color:green">+2.2%</span>   |     | <span style="color:green">+12.5%</span>  | <span style="color:green">+0.8%</span>    | <span style="color:green">+2.5%</span>    |     |
 
-![500 tuples](/assets/img/posts/2025-05-01-tuples-filter-on-multi-columns-with-django-orm/performance_comparison_input500.png)
+![500 tuples](/assets/img/posts/2025-05-01-tuples-filter-on-multi-columns-with-django-orm/performance-comparison-input500.png)
 
 ### Input size: 1000 tuples
 
@@ -402,10 +402,10 @@ Without further ado, let's dive into the results!
 | **Conditions** | <span style="color:green">824.89</span> | <span style="color:red">1350.06</span>   | <span style="color:white">TBD</span> |     | <span style="color:red">3291.13</span>   | <span style="color:red">15975.14</span>   | <span style="color:white">TBD</span> |     | <span style="color:green">5348.29</span> | <span style="color:green">40385.59</span> | <span style="color:white">TBD</span> |     | <span style="color:green">14064.40</span> | <span style="color:red">109039.78</span>   | <span style="color:white">TBD</span> |     |
 | **Diff %**     | <span style="color:red">-1.8%</span>    | <span style="color:green">+0.5%</span>   | <span style="color:white">TBD</span> |     | <span style="color:green">+4.4%</span>   | <span style="color:green">+2.5%</span>    | <span style="color:white">TBD</span> |     | <span style="color:red">-3.8%</span>     | <span style="color:red">-0.5%</span>      | <span style="color:white">TBD</span> |     | <span style="color:red">-4.0%</span>      | <span style="color:green">+4.5%</span>     | <span style="color:white">TBD</span> |     |
 
-![1000 tuples](/assets/img/posts/2025-05-01-tuples-filter-on-multi-columns-with-django-orm/performance_comparison_input1000.png)
+![1000 tuples](/assets/img/posts/2025-05-01-tuples-filter-on-multi-columns-with-django-orm/performance-comparison-input1000.png)
 
 > I had to abort the experiments for 1000 tuples on 4 columns, because it was taking too long to complete at this point (24 hours!).
-> {: .prompt-info }
+{: .prompt-info }
 
 ### Observations
 
