@@ -424,4 +424,6 @@ The experiment might not be perfect, but I do enjoy the process of building the 
 
 I hope this post helps you make an informed decision on which method to use, and I hope you enjoyed reading as much as I enjoyed writing it.
 
-See you next time!
+The whole code for the experiment is available on [GitHub](https://github.com/ldkv/django-experiments).
+
+Feel free to leave a comment below if you have any questions or feedback. Thank you for reading!
