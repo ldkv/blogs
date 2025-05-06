@@ -2,6 +2,7 @@
 layout: post
 title: Tuples filter on multi columns with Django ORM
 date: 2025-05-01 00:19 +0200
+mermaid: true
 ---
 
 ## Introduction
@@ -275,7 +276,7 @@ class Command(BaseCommand):
 This implementation allows to interrupt and resume the generation at any time, which is useful since the process will take quite a while to complete (around 10 minutes for 5 million rows on my machine).
 
 > It is possible to "cheat" the process by using pure SQL to duplicate the table from an existing one, for example:
-{: .prompt-info }
+> {: .prompt-info }
 
 ```sql
 INSERT INTO experiments_experiment10m (first_name, last_name, age, email, created_at)
@@ -322,18 +323,16 @@ Full implementation of the `ExperimentBase` class can be found [here](https://gi
 
 ### Command to run the experiments
 
-The last step is to run the experiments. For this, we will create a management command that will execute the following steps:
+The last step is to run the experiments with a [management command](https://github.com/ldkv/django-experiments/blob/main/experiments/management/commands/run_filter_experiments.py):
 
--   Loop through the 2 experiment methods
--   Loop through each submodel
--   Generate the inputs with the required number of tuples and columns given from the parameters
--   Call the experiment method with the generated inputs
--   Calculate the average duration after 200 runs
--   Save the average duration per submodel per experiment method to a JSON file
-
-![routines](/assets/img/posts/2025-05-01-tuples-filter-on-multi-columns-with-django-orm/experiments-flow.png)
-
-The implementation code of the command can be found [here](https://github.com/ldkv/django-experiments/blob/main/experiments/management/commands/run_filter_experiments.py).
+```mermaid
+flowchart LR
+    A(Loop through experiment methods) --> C(Loop through submodels)
+    C --> E[Generate inputs with required tuples and columns]
+    E --> F[Call experiment method]
+    F --> G[Measure average duration]
+    G --> C
+```
 
 ## Benchmark results
 
@@ -405,7 +404,7 @@ Without further ado, let's dive into the results!
 ![1000 tuples](/assets/img/posts/2025-05-01-tuples-filter-on-multi-columns-with-django-orm/performance-comparison-input1000.png)
 
 > I had to abort the experiments for 1000 tuples on 4 columns, because it was taking too long to complete at this point (24 hours!).
-{: .prompt-info }
+> {: .prompt-info }
 
 ### Observations
 
