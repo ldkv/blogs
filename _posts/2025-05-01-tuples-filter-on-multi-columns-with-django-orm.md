@@ -6,7 +6,7 @@ date: 2025-05-01 00:19 +0200
 
 ## Introduction
 
-As a daily Django developer, I often run into the need to filter on multiple columns with a tuple of values. For a long time, there was no built-in support in Django ORM for this use case, and developers have to come up with workarounds to achieve the desired result.
+As a daily Django user, I often run into the need to filter on multiple columns with a tuple of values. For a long time, there was no built-in support in Django ORM for this use case, and developers have to come up with workarounds to achieve the desired result.
 
 In this post, I will discuss some of the common workarounds, then present a solution that was "shadow" released together with [Django 5.2](https://docs.djangoproject.com/en/5.2/releases/5.2/), but has not been made public yet.
 
@@ -418,10 +418,10 @@ Without further ado, let's dive into the results!
 
 Even though the performance difference is pretty minimal, it is pretty safe to say that the Tuples method is the clear winner here. This difference could be explained by the fact that the resulting query is smaller with the Tuples method, thus is faster to transfer to the database server for execution.
 
-Beside better performance, the Tuples method has become a built-in feature in Django 5.2, which renders the code much cleaner and easier to maintain. If you are able to upgrade to Django 5.2, I would recommend to use the Tuples method.
+Beside better performance, the Tuples method has become a built-in feature in Django 5.2, which renders the code much cleaner and easier to maintain. However, it is still not recommended to use it in production, as the feature hasn't been officially released, and there might be some edge cases that are not yet covered.
 
-The experiment might not be perfect, but I do enjoy the process of building the benchmark and testing various theories I have in mind about Django ORM and PostgreSQL. It took me a whole day to complete _almost_ all the test scenarios, which was enough time for me to plot the graphs and finish the presentation (this very post).
+The experiment might not be perfect, but I do enjoy the process of building the benchmark and testing various theories I have in mind about Django ORM and PostgreSQL. It took me a whole day to complete _almost_ all the test scenarios, which was not wasted time since it allowed me to plot the graphs and finish writing this very post.
 
 I hope this post helps you make an informed decision on which method to use, and I hope you enjoyed reading as much as I enjoyed writing it.
 
-See you next time!
+The whole code for the experiment is available on [GitHub](https://github.com/ldkv/django-experiments).
