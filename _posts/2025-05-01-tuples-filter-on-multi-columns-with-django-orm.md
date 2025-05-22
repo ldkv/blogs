@@ -276,7 +276,7 @@ class Command(BaseCommand):
 This implementation allows to interrupt and resume the generation at any time, which is useful since the process will take quite a while to complete (around 10 minutes for 5 million rows on my machine).
 
 > It is possible to "cheat" the process by using pure SQL to duplicate the table from an existing one, for example:
-> {: .prompt-info }
+{: .prompt-info }
 
 ```sql
 INSERT INTO experiments_experiment10m (first_name, last_name, age, email, created_at)
@@ -404,7 +404,7 @@ Without further ado, let's dive into the results!
 ![1000 tuples](/assets/img/posts/2025-05-01-tuples-filter-on-multi-columns-with-django-orm/performance-comparison-input1000.png)
 
 > I had to abort the experiments for 1000 tuples on 4 columns, because it was taking too long to complete at this point (24 hours!).
-> {: .prompt-info }
+{: .prompt-info }
 
 ### Observations
 
