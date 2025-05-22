@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Dockerfile with intermediate layers using uv
+title: Dockerfile with intermediate layers for dependencies using uv
 date: 2025-05-22 00:21 +0200
 ---
 
@@ -14,11 +14,11 @@ There has been a lot of hype around uv since its release, and plenty of resource
 
 Switching to uv is quite straight-forward for most projects. However, there exists some edge cases that prevent teams from adopting it, such as adapting an existing `Dockerfile`.
 
-This post is dedicated to demonstrate some methods to adapt the `Dockerfile` to use `uv` for different scenarios.
+For that purpose, the uv documentation already provides a very comprehensive [guide to use uv in Docker](https://docs.astral.sh/uv/guides/integration/docker/#using-uv-in-docker).
 
-Now, let's define an example project and go through some minimal steps to migrate it to uv.
+This post will cover an edge case that is not mentioned in the documentation, which is using intermediate layers to speed up the `build` AND `pull` processes.
 
-# Migration to uv
+# Example project
 
 Let's consider a simple `FastAPI` project with the following requirements files:
 
@@ -41,6 +41,22 @@ uvicorn==0.34.2
 ```
 pytest==8.3.5
 ruff==0.11.11
+```
+
+And a `Dockerfile` that uses `pip` to install the dependencies:
+
+```dockerfile
+FROM python:3.13-slim
+
+WORKDIR /app
+
+COPY requirements-big.txt .
+
+RUN pip install -r requirements-big.txt
+
+COPY requirements.txt .
+
+RUN pip install -r requirements.txt
 ```
 
 The migration is as simple as creating a `pyproject.toml` file to declare the dependencies.
