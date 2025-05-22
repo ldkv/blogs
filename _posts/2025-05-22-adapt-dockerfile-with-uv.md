@@ -18,11 +18,11 @@ For that purpose, the uv documentation already provides a very comprehensive [gu
 
 This post will cover an edge case that is not mentioned in the documentation, which is using intermediate layers to speed up the `build` AND `pull` processes.
 
-# Example project
+# Migrate existing project to uv
 
 Let's consider a simple `FastAPI` project with the following requirements files:
 
--   `requirements-big.txt` with heavy packages that take a long time to install but rarely need to be updated:
+-   `requirements-heavy.txt` with heavy packages that take a long time to install but rarely need to be updated:
 
 ```
 tensorflow==2.19.0
@@ -43,36 +43,25 @@ pytest==8.3.5
 ruff==0.11.11
 ```
 
-And a `Dockerfile` that uses `pip` to install the dependencies:
-
-```dockerfile
-FROM python:3.13-slim
-
-WORKDIR /app
-
-COPY requirements-big.txt .
-
-RUN pip install -r requirements-big.txt
-
-COPY requirements.txt .
-
-RUN pip install -r requirements.txt
-```
-
-The migration is as simple as creating a `pyproject.toml` file to declare the dependencies.
+To migrate the project to `uv`, we can simply create a `pyproject.toml` file to declare the dependencies.
 
 ```toml
 [project]
 name = "test-project"
 version = "0.0.0"
 requires-python = "==3.13.*"
-dependencies = ["fastapi==0.115.12", "torch==2.7.0", "uvicorn==0.34.2"]
+dependencies = []
 
 [dependency-groups]
 dev = ["pytest==8.3.5", "ruff==0.11.11"]
+heavy-but-rarely-updated = ["tensorflow==2.19.0", "torch==2.7.0"]
+light-and-frequently-updated = ["fastapi==0.115.12", "uvicorn==0.34.2"]
 ```
 
-This is a minimal `pyproject.toml` file that declares the main dependencies of the project, and the development dependencies in the `dev` group. The `requires-python` field allows to specify the Python version that the project runs on.
+This is a minimal `pyproject.toml` file that declares the main dependencies of the project in separate groups, and the development dependencies in the `dev` group.
+
+> The `requires-python` field allows to specify the Python version that the project runs on.
+{: .prompt-info }
 
 To generate the virtual environment, simply run the following command:
 
@@ -81,6 +70,24 @@ uv sync
 ```
 
 The command will also create an auto-generated `uv.lock` file that locks the dependencies of the project. This is super useful to ensure that the dependencies and sub-dependencies are the same across different machines.
+
+And a `Dockerfile` that uses `pip` to install the dependencies:
+
+```dockerfile
+FROM python:3.13-slim
+
+WORKDIR /app
+
+COPY requirements-heavy.txt .
+RUN pip install -r requirements-heavy.txt
+
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+COPY . .
+```
+
+This is a typical use case where the dependencies are installed in 2 separate layers to
 
 As we can see, switching to uv is quite straight-forward for most projects. However, there exists some edge cases that prevent teams from adopting it, such as adapting an existing `Dockerfile`.
 
