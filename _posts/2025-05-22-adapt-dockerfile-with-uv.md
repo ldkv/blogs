@@ -105,8 +105,8 @@ This is quite a common structure where the dependencies are installed in 3 separ
 
 The separate layers also speed up the `pull` process on the client side, as it only needs to download the heavy dependencies layer once and reuse it for future deployments.
 
-> This is particularly useful for client machines with limited bandwidth or unstable Internet connection. This is a specific use case that I encountered at work, which inspired the writing of this post.
-{: .prompt-info }
+> This is particularly useful for client machines with limited bandwidth or unstable Internet connection. It is a specific use case that I encountered at work, which inspired the writing of this post.
+> {: .prompt-warning }
 
 # Adapt Dockerfile with uv
 
@@ -123,25 +123,51 @@ The first and simplest approach is covered in the uv [documentation](https://doc
 
 ```dockerfile
 FROM python:3.12.10-slim-bookworm
+
+# Copy uv binary from the official image instead of using base image with uv pre-installed.
+# It allows to use the same image as before migration, and only install uv when needed.
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
 
-# Enable bytecode compilation and copy mode
-ENV UV_COMPILE_BYTECODE=1 \
-    UV_LINK_MODE=copy \
-    UV_LOCKED=1
+# Enable bytecode compilation to speed up the first run
+ENV UV_COMPILE_BYTECODE=1
+
+# Copy from the cache instead of linking since it's a mounted volume
+ENV UV_LINK_MODE=copy
+
+# Force the build to fail if the auto-generated lock is not up to date
+ENV UV_LOCKED=1
 
 # LAYER 1 + 2: install HEAVY and LIGHT dependencies
+# 1. The cache is mounted to avoid re-downloading the dependencies if the lock file is not updated.
+# 2. The pyproject.toml and uv.lock files are bind-mounted which prevents the build from being invalidated by unrelated changes.
+# 3. The --no-install-project flag is used to avoid installing the project as a package, since the source code has not been copied yet.
+# 4. The --no-dev flag is used to avoid installing the development dependencies.
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --no-install-project --no-dev
 
 # LAYER 3: source code - install the project as a package
-COPY . /app
+COPY . .
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-dev
 
 CMD ["uvicorn", "main:app"]
+```
+
+Most of the comments are self-explanatory. In particular, to answer the first question, we combine 2 Docker techniques:
+
+-   [cache mount](https://docs.docker.com/build/cache/optimize/#use-cache-mounts): persists the uv cache for packages installation across builds, so even if the layer is rebuilt, only new or changed packages are downloaded.
+-   [bind mount](https://docs.docker.com/build/cache/optimize/#use-bind-mounts): links `pyproject.toml` and `uv.lock` from the host machine to the container for temporary use without generating any layer. If `COPY` is used here, it would generate a new layer that would be invalidated by any changes to the files.
+
+Thus, this layer will only be invalidated only if changes are made to the dependencies. Even so, it won't have to redownload everything, since the cache is mounted.
+
+## Approach 2: multiple dependency layers
+
+The second approach is to split the dependencies into multiple layers, which is more complex but allows to answer the second question:
+
+```dockerfile
+
 ```
