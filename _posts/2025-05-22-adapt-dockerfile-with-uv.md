@@ -14,7 +14,7 @@ There has been a lot of hype around uv since its release, and plenty of resource
 
 Switching to uv is quite straight-forward for most projects. However, there exists some edge cases that prevent teams from adopting it, such as adapting an existing `Dockerfile`.
 
-For that purpose, the uv documentation already provides a very comprehensive [guide to use uv in Docker](https://docs.astral.sh/uv/guides/integration/docker/#using-uv-in-docker), and a repository with [multiple examples](https://github.com/astral-sh/uv-docker-example) that covers most use cases.
+For that purpose, the uv documentation already provides a very comprehensive [guide to use uv in Docker](https://docs.astral.sh/uv/guides/integration/docker/#using-uv-in-docker), and a repository with [multiple examples](https://github.com/astral-sh/uv-docker-example) that covers most use cases, including multi-stage builds.
 
 This post is dedicated to an edge case that is not detailed in the documentation, which is **generating multiple dependency layers to optimize the `build` AND `pull` processes.**
 
@@ -67,7 +67,7 @@ This is a minimal `pyproject.toml` file that declares the main dependencies of t
 
 > The `requires-python` field specifies the Python version that the project should run on, which will be picked up automatically by `uv` to generate the virtual environment.
 > If the specific version does not exist on the machine, `uv` will automatically download it for immediate and future use without any input from the user. Very handy!
-{: .prompt-info }
+> {: .prompt-info }
 
 To generate the virtual environment, simply run the following command:
 
@@ -84,6 +84,9 @@ A typical `Dockerfile` that uses `pip` to install the dependencies would be as f
 ```dockerfile
 FROM python:3.12.10-slim-bookworm
 
+# System dependencies: gcc for dependencies building
+RUN apt-get update && apt-get install -y --no-install-recommends gcc
+
 WORKDIR /app
 
 # LAYER 1: heavy dependencies, rarely updated
@@ -97,8 +100,6 @@ RUN pip install -r requirements.txt
 # LAYER 3: source code - install the project as a package
 COPY . .
 RUN pip install .
-
-CMD ["uvicorn", "main:app"]
 ```
 
 This is quite a common structure where the dependencies are installed in 3 separate [cache layers](https://docs.docker.com/build/cache/) to speed up the `build` process. It allows us to modify the light dependencies and the source code without invalidating the heavy dependencies layer, which takes a long time to install.
@@ -114,6 +115,7 @@ At first sight, the obvious questions that comes to mind are:
 
 1. If we make unrelated changes to `pyproject.toml`, such as updating the project name or version, would the whole layer be invalidated?
 2. How can we adapt a multi-layer structure with one single `pyproject.toml` file instead of multiple requirements files?
+3. How to define a multi-stage build with multi-layer dependencies?
 
 Let's try multiple approaches to adapt the `Dockerfile` to use `uv`, from the simplest to the most complex.
 
@@ -124,13 +126,19 @@ The first and simplest approach is covered in the uv [documentation](https://doc
 ```dockerfile
 FROM python:3.12.10-slim-bookworm
 
+# System dependencies should be the first layer before uv since they might be heavier and less likely to change.
+RUN apt-get update && apt-get install -y --no-install-recommends gcc
+
 # Copy uv binary from the official image instead of using base image with uv pre-installed.
 # It allows to use the same image as before migration, and only install uv when needed.
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
 
-# Enable bytecode compilation to speed up the first run
+# Force uv to use system Python instead of downloading it
+ENV UV_PYTHON_DOWNLOADS=0
+
+# Enable bytecode compilation to speed up the startup time
 ENV UV_COMPILE_BYTECODE=1
 
 # Copy from the cache instead of linking since it's a mounted volume
@@ -149,10 +157,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --no-install-project --no-dev
 
-# LAYER 3: source code - install the project as a package
+# LAYER 3: source code
 COPY . .
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --no-dev
+
+# Place executables in the environment at the front of the path
+ENV PATH="/app/.venv/bin:$PATH"
 
 CMD ["uvicorn", "main:app"]
 ```
@@ -162,12 +171,82 @@ Most of the comments are self-explanatory. In particular, to answer the first qu
 -   [cache mount](https://docs.docker.com/build/cache/optimize/#use-cache-mounts): persists the uv cache for packages installation across builds, so even if the layer is rebuilt, only new or changed packages are downloaded.
 -   [bind mount](https://docs.docker.com/build/cache/optimize/#use-bind-mounts): links `pyproject.toml` and `uv.lock` from the host machine to the container for temporary use without generating any layer. If `COPY` is used here, it would generate a new layer that would be invalidated by any changes to the files.
 
-Thus, this layer will only be invalidated only if changes are made to the dependencies. Even so, it won't have to redownload everything, since the cache is mounted.
+Thus, this layer will only be invalidated if changes are made to the dependencies. Even so, it won't have to redownload everything, since the cache is mounted.
 
-## Approach 2: multiple dependency layers
+## Approach 2: multi-layer dependencies
 
-The second approach is to split the dependencies into multiple layers, which is more complex but allows to answer the second question:
+The second approach is to split the dependencies into multiple layers, which should answer the second question. We will reuse the same `Dockerfile` and `RUN` command in the first approach, with only changes to the `RUN` command to separate layers 1 and 2 installation.
 
 ```dockerfile
+# ... ENV variables ...
 
+# LAYER 1: HEAVY dependencies
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --no-install-project --no-dev --only-group heavy-rarely-updated
+
+# LAYER 2: LIGHT dependencies
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --no-install-project --no-dev --only-group light-frequently-updated
+
+# ... LAYER 3 ...
 ```
+
+The `--only-group` flag is used to install only the dependencies of the specified group, which replicates nicely the use of multiple requirements files.
+
+This approach will not only speed up the `build` process in dev environment, but also the `pull` process for client machines, as they can cache the heavy dependencies layer once and reuse it for subsequent application updates.
+
+## Approach 3: multi-layer dependencies
+
+As you must have noticed, both approaches above are rather wasteful in terms of image size, as they must install `gcc` in system packages, and `uv` itself is not needed either during runtime. A minimal image size is important to speed up push and pull operations, and to minimize long-term storage cost.
+
+To address this issue, we can use a multi-stage build to install the dependencies in a separate stage, then copy the virtual environment to the final image.
+
+```dockerfile
+# Build stage
+FROM python:3.12.10-slim-bookworm AS builder
+
+# Install build dependencies: gcc and uv
+RUN apt-get update && apt-get install -y --no-install-recommends gcc
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Configure uv settings
+ENV UV_PYTHON_DOWNLOADS=0 \
+	UV_COMPILE_BYTECODE=1 \
+	UV_LINK_MODE=copy \
+	UV_LOCKED=1
+
+WORKDIR /packages
+
+# Install dependencies in separate layers
+RUN --mount=type=cache,target=/root/.cache/uv \
+	--mount=type=bind,source=uv.lock,target=uv.lock \
+	--mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+	env UV_PROJECT_ENVIRONMENT=./heavy uv sync --no-install-project --no-dev --only-group heavy-rarely-updated && \
+	env UV_PROJECT_ENVIRONMENT=./light uv sync --no-install-project --no-dev --only-group light-frequently-updated
+
+# Final image without gcc and uv
+FROM python:3.12.10-slim-bookworm
+
+WORKDIR /app
+
+ENV VENV_PATH=/app/.venv/
+
+# Copy dependencies in separate layers
+COPY --from=builder /packages/heavy $VENV_PATH
+COPY --from=builder /packages/light $VENV_PATH
+
+# Source code
+COPY . .
+
+ENV PATH="$VENV_PATH/bin:$PATH"
+
+CMD ["uvicorn", "main:app"]
+```
+
+The biggest difference here is the use of environment variable `UV_PROJECT_ENVIRONMENT`. It is an official [uv configuration](https://docs.astral.sh/uv/concepts/projects/config/#project-environment-path), which is somewhat equivalent to the [`pip --prefix` option](https://pip.pypa.io/en/stable/cli/pip_install/#cmdoption-prefix). By customize this value, we can install each dependencies group into a separate directory, which is then copied to the final image, each copy being a separate layer.
+
+With this approach, we can install all dependencies groups with a single `RUN` command during the build process, since they don't affect the final image layers at all. However, if it is necessary to optimize the build time, we can always separate the RUN command into multiple steps as in the second approach.
