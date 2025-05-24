@@ -97,9 +97,10 @@ RUN pip install -r requirements-heavy.txt
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-# LAYER 3: source code - install the project as a package
-COPY . .
-RUN pip install .
+# LAYER 3: source code
+COPY src src
+
+CMD ["uvicorn", "main:app"]
 ```
 
 This is quite a common structure where the dependencies are installed in 3 separate [cache layers](https://docs.docker.com/build/cache/) to speed up the `build` process. It allows us to modify the light dependencies and the source code without invalidating the heavy dependencies layer, which takes a long time to install.
@@ -158,7 +159,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-install-project --no-dev
 
 # LAYER 3: source code
-COPY . .
+COPY src src
 
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"
@@ -240,7 +241,7 @@ COPY --from=builder /packages/heavy $VENV_PATH
 COPY --from=builder /packages/light $VENV_PATH
 
 # Source code
-COPY . .
+COPY src src
 
 ENV PATH="$VENV_PATH/bin:$PATH"
 
@@ -249,4 +250,23 @@ CMD ["uvicorn", "main:app"]
 
 The biggest difference here is the use of environment variable `UV_PROJECT_ENVIRONMENT`. It is an official [uv configuration](https://docs.astral.sh/uv/concepts/projects/config/#project-environment-path), which is somewhat equivalent to the [`pip --prefix` option](https://pip.pypa.io/en/stable/cli/pip_install/#cmdoption-prefix). By customize this value, we can install each dependencies group into a separate directory, which is then copied to the final image, each copy being a separate layer.
 
-With this approach, we can install all dependencies groups with a single `RUN` command during the build process, since they don't affect the final image layers at all. However, if it is necessary to optimize the build time, we can always separate the RUN command into multiple steps as in the second approach.
+With this approach, we can install all dependencies groups with a single `RUN` command during the build process, since they don't affect the final image layers at all. However, if it is necessary to optimize the build time, we can always separate the RUN command into multiple steps as in the second approach, with a small trade-off of a more bloated `Dockerfile`.
+
+# Comparison with actual data
+
+Now let's compare the difference between approaches with actual data. For each approach (including the legacy one), I will excecute the following steps and measure the execution time:
+
+1. Cold build: build the image from scratch
+2. Cold push: push the cold built image to the registry
+3. Hot build: build the image again with a dependency update in `light-frequently-updated` group
+4. Hot push: push the hot built image to the registry
+5. Cold pull: pull the cold built image from the registry
+6. Hot pull: pull the hot built image from the registry
+
+| Approach   | Legacy   | Single layer | Multi-layer | Multi-stage |
+| ---------- | -------- | ------------ | ----------- | ----------- |
+| Cold build | 448.75s  | 1m 30s       | 1m 30s      | 1m 30s      |
+| Hot build  | 4.3s     | 1m 30s       | 1m 30s      | 1m 30s      |
+| Image Size | 19.48 GB | 1.3 GB       | 1.3 GB      | 1.3 GB      |
+
+# Conclusion
