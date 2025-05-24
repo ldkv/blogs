@@ -1,0 +1,13 @@
+[project]
+name = "test-project"
+version = "0.0.0"
+requires-python = "==3.12.*"
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest==8.3.5", "ruff==0.11.11"]
+heavy-rarely-updated = ["tensorflow==2.19.0", "torch==2.7.0"]
+light-frequently-updated = ["fastapi==0.115.12", "uvicorn==0.34.2"]
+
+[tool.uv]
+default-groups = ["dev", "heavy-rarely-updated", "light-frequently-updated"]

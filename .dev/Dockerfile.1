@@ -1,0 +1,42 @@
+FROM python:3.12.10-slim-bookworm
+
+# System dependencies should be the first layer before uv since they might be heavier and less likely to change.
+RUN apt-get update && apt-get install -y --no-install-recommends gcc
+
+# Copy uv binary from the official image instead of using base image with uv pre-installed.
+# It allows to use the same image as before migration, and only install uv when needed.
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+WORKDIR /app
+
+# Force uv to use system Python instead of downloading it
+ENV UV_PYTHON_DOWNLOADS=0
+
+# Enable bytecode compilation to speed up the startup time
+ENV UV_COMPILE_BYTECODE=1
+
+# Copy from the cache instead of linking since it's a mounted volume
+ENV UV_LINK_MODE=copy
+
+# Force the build to fail if the auto-generated lock is not up to date
+ENV UV_LOCKED=1
+
+# LAYER 1 + 2: install HEAVY and LIGHT dependencies
+# 1. The cache is mounted to avoid re-downloading the dependencies if the lock file is not updated.
+# 2. The pyproject.toml and uv.lock files are bind-mounted which prevents the build from being invalidated by unrelated changes.
+# 3. The --no-install-project flag is used to avoid installing the project as a package, since the source code has not been copied yet.
+# 4. The --no-dev flag is used to avoid installing the development dependencies.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --no-install-project --no-dev
+
+# LAYER 3: source code
+COPY . .
+
+# Place executables in the environment at the front of the path
+ENV PATH="/app/.venv/bin:$PATH"
+
+EXPOSE 8000
+
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

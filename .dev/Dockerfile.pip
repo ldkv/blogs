@@ -1,0 +1,22 @@
+FROM python:3.12.10-slim-bookworm
+
+# System dependencies: gcc for dependencies building
+RUN apt-get update && apt-get install -y --no-install-recommends gcc
+
+WORKDIR /app
+
+# LAYER 1: heavy dependencies, rarely updated
+COPY requirements-heavy.txt .
+RUN pip install -r requirements-heavy.txt
+
+# LAYER 2: light dependencies, frequently updated
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+# LAYER 3: source code
+COPY src src
+COPY Dockerfile.pip .
+
+EXPOSE 8000
+
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
