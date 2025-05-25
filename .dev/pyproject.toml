@@ -6,7 +6,7 @@ dependencies = []
 
 [dependency-groups]
 dev = ["pytest==8.3.5", "ruff==0.11.11"]
-heavy-rarely-updated = ["tensorflow==2.19.0", "torch==2.7.0"]
+heavy-rarely-updated = ["torch==2.7.0"]
 light-frequently-updated = [
     "fastapi==0.115.12",
     "uvicorn==0.34.2",
