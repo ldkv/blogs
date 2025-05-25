@@ -265,8 +265,10 @@ Now let's compare the difference between approaches with actual data. For each a
 
 | Approach   | Legacy   | Single layer | Multi-layer | Multi-stage |
 | ---------- | -------- | ------------ | ----------- | ----------- |
-| Cold build | 448.75s  | 1m 30s       | 1m 30s      | 1m 30s      |
-| Hot build  | 4.3s     | 1m 30s       | 1m 30s      | 1m 30s      |
-| Image Size | 19.48 GB | 1.3 GB       | 1.3 GB      | 1.3 GB      |
+| Cold build | 429.14s  | 302.21s      | 1m 30s      | 1m 30s      |
+| Hot build  | 5.10s    | 207.43s      | 1m 30s      | 1m 30s      |
+| Cold push  | 448.75s  | 250.55s      | 1m 30s      | 1m 30s      |
+| Hot push   | 4.3s     | 229.12s      | 1m 30s      | 1m 30s      |
+| Image Size | 19.48 GB | 12 GB        | 1.3 GB      | 1.3 GB      |
 
 # Conclusion

@@ -1,43 +1,39 @@
-FROM python:3.12.10-slim-bookworm
+FROM python:3.12.10-slim-bookworm AS builder
 
-# System dependencies should be the first layer before uv since they might be heavier and less likely to change.
+# Install build dependencies: gcc and uv
 RUN apt-get update && apt-get install -y --no-install-recommends gcc
-
-# Copy uv binary from the official image instead of using base image with uv pre-installed.
-# It allows to use the same image as before migration, and only install uv when needed.
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Configure uv settings
+ENV UV_PYTHON_DOWNLOADS=0 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_LOCKED=1
+
+WORKDIR /packages
+
+# Install dependencies in separate layers
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    env UV_PROJECT_ENVIRONMENT=./heavy uv sync --no-install-project --no-dev --only-group heavy-rarely-updated && \
+    env UV_PROJECT_ENVIRONMENT=./light uv sync --no-install-project --no-dev --only-group light-frequently-updated
+
+# Final image without gcc and uv
+FROM python:3.12.10-slim-bookworm
 
 WORKDIR /app
 
-# Force uv to use system Python instead of downloading it
-ENV UV_PYTHON_DOWNLOADS=0
+ENV VENV_PATH=/app/.venv/
 
-# Enable bytecode compilation to speed up the startup time
-ENV UV_COMPILE_BYTECODE=1
+# Copy dependencies in separate layers
+COPY --from=builder /packages/heavy $VENV_PATH
+COPY --from=builder /packages/light $VENV_PATH
 
-# Copy from the cache instead of linking since it's a mounted volume
-ENV UV_LINK_MODE=copy
-
-# Force the build to fail if the auto-generated lock is not up to date
-ENV UV_LOCKED=1
-
-# LAYER 1: HEAVY dependencies
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --no-install-project --no-dev --only-group heavy-rarely-updated
-
-# LAYER 2: LIGHT dependencies
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --no-install-project --no-dev --only-group light-frequently-updated
-
-# LAYER 3: source code
+# Source code
 COPY src src
 
-# Place executables in the environment at the front of the path
-ENV PATH="/app/.venv/bin:$PATH"
+ENV PATH="$VENV_PATH/bin:$PATH"
 
 EXPOSE 8000
 

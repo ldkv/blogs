@@ -830,6 +830,7 @@ heavy-rarely-updated = [
 ]
 light-frequently-updated = [
     { name = "fastapi" },
+    { name = "requests" },
     { name = "uvicorn" },
 ]
 
@@ -846,6 +847,7 @@ heavy-rarely-updated = [
 ]
 light-frequently-updated = [
     { name = "fastapi", specifier = "==0.115.12" },
+    { name = "requests", specifier = "==2.32.3" },
     { name = "uvicorn", specifier = "==0.34.2" },
 ]
 

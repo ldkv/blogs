@@ -15,7 +15,6 @@ RUN pip install -r requirements.txt
 
 # LAYER 3: source code
 COPY src src
-COPY Dockerfile.pip .
 
 EXPOSE 8000
 
