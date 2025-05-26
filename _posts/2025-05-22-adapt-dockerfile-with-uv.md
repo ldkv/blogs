@@ -18,105 +18,9 @@ For that purpose, the uv documentation already provides a very comprehensive [gu
 
 This post is dedicated to an edge case that is not detailed in the documentation, which is **generating multiple dependency layers to optimize the Docker workflow from development to production.**
 
-First, let's define an example project and go through some minimal steps to migrate it to `uv`.
+# Docker lifecycle and Dockerfile
 
-# Migrate existing project to uv
-
-Let's consider a simple `FastAPI` project with the following requirements files:
-
--   `requirements-heavy.txt` with heavy packages that take a long time to install but rarely need to be updated:
-
-```
-tensorflow==2.19.0
-torch==2.7.0
-```
-
--   `requirements.txt` with light packages that are frequently updated:
-
-```
-fastapi==0.115.12
-uvicorn==0.34.2
-```
-
--   `requirements-dev.txt` for development dependencies:
-
-```
-pytest==8.3.5
-ruff==0.11.11
-```
-
-To migrate the project to `uv`, we can simply create a `pyproject.toml` file to declare the dependencies.
-
-```toml
-[project]
-name = "test-project"
-version = "0.0.0"
-requires-python = "==3.12.*"
-dependencies = []
-
-[dependency-groups]
-dev = ["pytest==8.3.5", "ruff==0.11.11"]
-heavy-rarely-updated = ["tensorflow==2.19.0", "torch==2.7.0"]
-light-frequently-updated = ["fastapi==0.115.12", "uvicorn==0.34.2"]
-
-[tool.uv]
-default-groups = ["dev", "heavy-rarely-updated", "light-frequently-updated"]
-```
-
-This is a minimal `pyproject.toml` file that declares the main dependencies of the project in separate groups, and the development dependencies in the `dev` group.
-
-> The `requires-python` field specifies the Python version that the project should run on, which will be picked up automatically by `uv` to generate the virtual environment.
-> If the specific version does not exist on the machine, `uv` will automatically download it for immediate and future use without any input from the user. Very handy!
-> {: .prompt-info }
-
-To generate the virtual environment, simply run the following command:
-
-```shell
-uv sync
-```
-
-The command will also create an auto-generated `uv.lock` file that locks the dependencies of the project. This is super useful to ensure that the dependencies and sub-dependencies are the same across different machines.
-
-# Legacy Dockerfile with pip install
-
-A typical `Dockerfile` that uses `pip` to install the dependencies would be as follows:
-
-```dockerfile
-FROM python:3.12.10-slim-bookworm
-
-# System dependencies: gcc for dependencies building
-RUN apt-get update && apt-get install -y --no-install-recommends gcc
-
-WORKDIR /app
-
-# LAYER 1: heavy dependencies, rarely updated
-COPY requirements-heavy.txt .
-RUN pip install -r requirements-heavy.txt
-
-# LAYER 2: light dependencies, frequently updated
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-
-# LAYER 3: source code
-COPY src src
-
-CMD ["uvicorn", "main:app"]
-```
-
-This is quite a common structure where the dependencies are installed in 3 separate [cache layers](https://docs.docker.com/build/cache/) to speed up the `build` process. It allows us to modify the light dependencies and the source code without invalidating the heavy dependencies layer, which takes a long time to install.
-
-The separate layers also speed up the `pull` process on the client side, as it only needs to download the heavy dependencies layer once and reuse it for future deployments.
-
-> This is particularly useful for client machines with limited bandwidth or unstable Internet connection. It is a specific use case that I encountered at work, which inspired the writing of this post.
-> {: .prompt-warning }
-
-# Adapt Dockerfile with uv
-
-Before diving into uv-specific techniques, I'll first explain the importance of writing a good `Dockerfile`.
-
-# Dockerfile and Docker lifecycle
-
-Before diving into the main content, I'll first explain the importance of writing a good `Dockerfile`, and how it will affect each stage in the Docker lifecycle. If you are already familiar with Docker and its core concepts, you can skip this section to #TODO.
+Before diving into the main content, I'll first explain the importance of writing a good `Dockerfile`, and how it will affect each stage in the Docker lifecycle. If you are already familiar with Docker and its core concepts, you can skip this section straight to the [main course](#dockerfile-with-uv).
 
 ## Docker lifecycle
 
@@ -176,7 +80,7 @@ Now that the basics are covered, let's move on to the main content.
 In this section we will cover 2 scenarios and how to adapt the `Dockerfile` with `uv` in each case.
 
 1. [Multi-layer dependencies within a single-stage build](#multi-layer-dependencies-within-a-single-stage-build)
-2. Multi-layer dependencies with [multi-stage builds](https://docs.docker.com/build/building/multi-stage/)
+2. [Multi-layer dependencies with multi-stage builds](#multi-layer-dependencies-with-multi-stage-builds)
 
 But first, let's define an example project and go through some minimal steps to migrate it to `uv`.
 
@@ -269,7 +173,7 @@ COPY src src
 
 EXPOSE 8000
 
-CMD ["uvicorn", "src.main:app"]
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
 This is a very common structure where the dependencies are installed in 3 separate `cache layers`. It allows us to modify the light dependencies and the source code without invalidating the heavy dependencies layer, which **takes a long time to build**.
@@ -279,8 +183,7 @@ The adaptation for this case is covered in the uv [documentation](https://docs.a
 ```dockerfile
 FROM python:3.12.10-slim-bookworm
 
-# System dependencies should be the first layer before uv binary
-# since they might be heavier and less likely to change.
+# System dependencies should be the first layer before uv since they might be heavier and less likely to change.
 RUN apt-get update && apt-get install -y --no-install-recommends gcc
 
 # Copy uv binary from the official image instead of using base image with uv pre-installed.
@@ -317,7 +220,9 @@ COPY src src
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"
 
-CMD ["uvicorn", "main:app"]
+EXPOSE 8000
+
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
 Most of the comments are self-explanatory. In particular, we combined 2 Docker techniques to optimize the dependencies layer:
@@ -342,6 +247,7 @@ To address this issue, we can use [multi-stage build](https://docs.docker.com/bu
 The legacy `Dockerfile` would be as follows:
 
 ```dockerfile
+# 1. Builder stage: build dependencies into separate folders
 FROM python:3.12.10-slim-bookworm AS builder
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
@@ -350,7 +256,6 @@ WORKDIR /packages
 
 RUN apt-get update && apt-get install -y --no-install-recommends gcc
 
-# Build dependencies into separate folders
 COPY requirements-heavy.txt .
 RUN pip3 install --prefix=./heavy -r requirements-heavy.txt
 
@@ -358,68 +263,7 @@ COPY requirements.txt .
 RUN pip3 install --prefix=./light -r requirements.txt
 
 
-# Final image without gcc
-FROM python:3.12.10-slim-bookworm
-
-ENV PYTHON_PATH=/usr/local
-
-WORKDIR /app
-
-# LAYER 1: heavy dependencies
-COPY --from=builder /packages/heavy ${PYTHON_PATH}
-
-# LAYER 2: light dependencies
-COPY --from=builder /packages/light ${PYTHON_PATH}
-
-# LAYER 3: source code
-COPY ./src ./src
-
-EXPOSE 8000
-
-CMD ["uvicorn", "src.main:app"]
-```
-
-And the uv-specific `Dockerfile`:
-
-```dockerfile
-# Multi-stage build to create a final image with multi-layer dependencies
-# 1st stage: generate requirements files
-FROM python:3.12.10-slim-bookworm AS generator
-
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-
-# Configure uv settings
-ENV UV_LINK_MODE=copy \
-    UV_LOCKED=1
-
-WORKDIR /packages
-
-# Generate requirements files for each group
-RUN --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv pip compile --emit-index-url --group heavy-rarely-updated -o requirements-heavy.txt \
-    && uv pip compile --emit-index-url --group light-frequently-updated -o requirements-light.txt
-
-# 2nd stage: build dependencies into separate folders
-FROM python:3.12.10-slim-bookworm AS builder
-
-# Install build dependencies: gcc and uv
-RUN apt-get update && apt-get install -y --no-install-recommends gcc
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-
-# Configure uv settings
-ENV UV_PYTHON_DOWNLOADS=0
-
-WORKDIR /packages
-
-COPY --from=generator /packages/requirements-heavy.txt ./
-RUN uv pip install --prefix=./heavy --no-deps -r requirements-heavy.txt
-
-COPY --from=generator /packages/requirements-light.txt .
-RUN uv pip install --prefix=./light --no-deps -r requirements-light.txt
-
-
-# Final image without gcc and uv
+# 2. Final image without gcc
 FROM python:3.12.10-slim-bookworm
 
 ENV PYTHON_PATH=/usr/local
@@ -440,11 +284,69 @@ EXPOSE 8000
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
-There are 3 stages in the `uv` approach instead of 2 as in the legacy `Dockerfile`. If you look closely, the final stages are exactly the same, while the intermediate stages are different.
+And the uv-specific `Dockerfile`:
 
-The biggest difference here is the use of environment variable `UV_PROJECT_ENVIRONMENT`. It is an official [uv configuration](https://docs.astral.sh/uv/concepts/projects/config/#project-environment-path), which is somewhat equivalent to the [`pip --prefix` option](https://pip.pypa.io/en/stable/cli/pip_install/#cmdoption-prefix). By customize this value, we can install each dependencies group into a separate directory, which is then copied to the final image, each copy being a separate layer.
+```dockerfile
+# 1. Generator stage: generate requirements files
+FROM python:3.12.10-slim-bookworm AS generator
 
-With this approach, we can install all dependencies groups with a single `RUN` command during the build process, since they don't affect the final image layers at all. However, if it is necessary to optimize the build time, we can always separate the RUN command into multiple steps as in the second approach, with a small trade-off of a more bloated `Dockerfile`.
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Configure uv settings
+ENV UV_LINK_MODE=copy \
+    UV_LOCKED=1
+
+WORKDIR /packages
+
+# Generate requirements files for each group
+RUN --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv pip compile --emit-index-url --group heavy-rarely-updated -o requirements-heavy.txt \
+    && uv pip compile --emit-index-url --group light-frequently-updated -o requirements-light.txt
+
+# 2. Builder stage: build dependencies into separate folders
+FROM python:3.12.10-slim-bookworm AS builder
+
+# Install build dependencies: gcc and uv
+RUN apt-get update && apt-get install -y --no-install-recommends gcc
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Configure uv settings
+ENV UV_PYTHON_DOWNLOADS=0
+
+WORKDIR /packages
+
+COPY --from=generator /packages/requirements-heavy.txt ./
+RUN uv pip install --prefix=./heavy --no-deps -r requirements-heavy.txt
+
+COPY --from=generator /packages/requirements-light.txt .
+RUN uv pip install --prefix=./light --no-deps -r requirements-light.txt
+
+
+# 3. Final image without gcc and uv
+FROM python:3.12.10-slim-bookworm
+
+ENV PYTHON_PATH=/usr/local
+
+WORKDIR /app
+
+# LAYER 1: heavy dependencies
+COPY --from=builder /packages/heavy ${PYTHON_PATH}
+
+# LAYER 2: light dependencies
+COPY --from=builder /packages/light ${PYTHON_PATH}
+
+# LAYER 3: source code
+COPY ./src ./src
+
+EXPOSE 8000
+
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+There are 3 stages in the `uv` approach instead of 2 as in the legacy `Dockerfile`. If you look closely, the builder and final stages are quite similar. Both approaches make use of the [pip --prefix option](https://pip.pypa.io/en/stable/cli/pip_install/#cmdoption-prefix) to install each dependencies group into a separate directory, which is then copied to the final image, each copy being a separate layer.
+
+The biggest difference is the additional `generator` stage in the `uv` approach. It is necessary to generate the requirements files for each dependencies group, which are then copied to the builder stage. The separate stage is **required** to avoid invalidating the builder stage by unrelated changes to the `pyproject.toml` file.
 
 # Comparison with actual data
 
@@ -459,10 +361,10 @@ Now let's compare the difference between approaches with actual data. For each a
 
 | Approach   | pip single | pip multi | uv single | uv multi |
 | ---------- | ---------- | --------- | --------- | -------- |
-| Cold build | 268.98s    | 287.51s   | 273.51s   | 241.45s  |
-| Hot build  | 4.75s      | 14.90s    | 165.40s   | 8.61s    |
-| Cold push  | 9.26s      | 7.09s     | 54.39s    | 8.60s    |
-| Hot push   | 1.03s      | 0.93s     | 50.63s    | 1.02s    |
+| Cold build | 268.98s    | 287.51s   | 244.29s   | 241.45s  |
+| Hot build  | 4.75s      | 14.90s    | 153.01s   | 8.61s    |
+| Cold push  | 9.26s      | 7.09s     | 8.33s     | 8.60s    |
+| Hot push   | 1.03s      | 0.93s     | 7.95s     | 1.02s    |
 | Image Size | 9.09 GB    | 8.81 GB   | 9.13 GB   | 8.66 GB  |
 
 # Conclusion
