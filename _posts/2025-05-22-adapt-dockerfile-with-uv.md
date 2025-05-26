@@ -153,7 +153,9 @@ Let's consider this legacy `Dockerfile` that uses `pip` to install the Python de
 FROM python:3.12.10-slim-bookworm
 
 # System dependencies: gcc for dependencies building
-RUN apt-get update && apt-get install -y --no-install-recommends gcc
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gcc \
+    && rm -rf /var/lib/apt/lists/*
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1
@@ -184,7 +186,9 @@ The adaptation for this case is covered in the uv [documentation](https://docs.a
 FROM python:3.12.10-slim-bookworm
 
 # System dependencies should be the first layer before uv since they might be heavier and less likely to change.
-RUN apt-get update && apt-get install -y --no-install-recommends gcc
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gcc \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy uv binary from the official image instead of using base image with uv pre-installed.
 # It allows to use the same image as before migration, and only install uv when needed.
@@ -393,7 +397,7 @@ Without further ado, here are the results.
 | **Hot build**  | 4.75s      | 14.90s    | 153.01s   | 8.61s    |
 | **Cold push**  | 9.26s      | 7.09s     | 8.33s     | 8.60s    |
 | **Hot push**   | 1.03s      | 0.93s     | 7.95s     | 1.02s    |
-| **Image Size** | 9.09 GB    | 8.81 GB   | 9.13 GB   | 8.66 GB  |
+| **Image Size** | 9.05 GB    | 8.81 GB   | 9.13 GB   | 8.66 GB  |
 
 As expected, the `uv-multi` approach is the fastest and the smallest in terms of image size, thanks to `uv` speed and optimized lock file.
 
@@ -402,3 +406,9 @@ The `uv-single` method is also fast during a **cold build**, but struggles with 
 The `pip-single` method wins the **hot build** step due to the nature of single-stage build.
 
 # Conclusion
+
+The `uv-multi` approach is the clear winner in terms of speed and image size, but it requires a bit more effort to set up, which renders the Dockerfile much more complex. I would recommend this approach for large projects with many heavy dependencies such as `torch` or `tensorrt`.
+
+For projects with only light dependencies and where image size is not a big concern, the `uv-single` approach is the simplest to set up and maintain. Most of the time you won't notice any difference due to the speed of `uv`.
+
+I would not recommend using the legacy `pip` methods, since it will defeat the whole purpose of this post 😛. They are a relic of the past and should stay that way.

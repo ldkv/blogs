@@ -19,7 +19,9 @@ RUN --mount=type=bind,source=uv.lock,target=uv.lock \
 FROM python:3.12.10-slim-bookworm AS builder
 
 # Install build dependencies: gcc and uv
+# Cleanup is not necessary since the builder stage is not used in the final image
 RUN apt-get update && apt-get install -y --no-install-recommends gcc
+
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 # Configure uv settings
