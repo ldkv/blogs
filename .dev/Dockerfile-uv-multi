@@ -1,3 +1,22 @@
+# Multi-stage build to create a final image with multi-layer dependencies
+# 1st stage: generate requirements files
+FROM python:3.12.10-slim-bookworm AS generator
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Configure uv settings
+ENV UV_LINK_MODE=copy \
+    UV_LOCKED=1
+
+WORKDIR /packages
+
+# Generate requirements files for each group
+RUN --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv pip compile --emit-index-url --group heavy-rarely-updated -o requirements-heavy.txt \
+    && uv pip compile --emit-index-url --group light-frequently-updated -o requirements-light.txt
+
+# 2nd stage: build dependencies into separate folders
 FROM python:3.12.10-slim-bookworm AS builder
 
 # Install build dependencies: gcc and uv
@@ -5,39 +24,32 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 # Configure uv settings
-ENV UV_PYTHON_DOWNLOADS=0 \
-    UV_COMPILE_BYTECODE=1 \
-    UV_LINK_MODE=copy \
-    UV_LOCKED=1
+ENV UV_PYTHON_DOWNLOADS=0
 
 WORKDIR /packages
 
-# Install dependencies in separate layers
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    env UV_PROJECT_ENVIRONMENT=./heavy uv sync --no-install-project --no-dev --only-group heavy-rarely-updated
+COPY --from=generator /packages/requirements-heavy.txt ./
+RUN uv pip install --prefix=./heavy --no-deps -r requirements-heavy.txt
 
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    env UV_PROJECT_ENVIRONMENT=./light uv sync --no-install-project --no-dev --only-group light-frequently-updated
+COPY --from=generator /packages/requirements-light.txt .
+RUN uv pip install --prefix=./light --no-deps -r requirements-light.txt
+
 
 # Final image without gcc and uv
 FROM python:3.12.10-slim-bookworm
 
+ENV PYTHON_PATH=/usr/local
+
 WORKDIR /app
 
-ENV VENV_PATH=/app/.venv/
+# LAYER 1: heavy dependencies
+COPY --from=builder /packages/heavy ${PYTHON_PATH}
 
-# Copy dependencies in separate layers
-COPY --from=builder /packages/heavy $VENV_PATH
-COPY --from=builder /packages/light $VENV_PATH
+# LAYER 2: light dependencies
+COPY --from=builder /packages/light ${PYTHON_PATH}
 
-# Source code
-COPY src src
-
-ENV PATH="$VENV_PATH/bin:$PATH"
+# LAYER 3: source code
+COPY ./src ./src
 
 EXPOSE 8000
 

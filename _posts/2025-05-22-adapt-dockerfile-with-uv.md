@@ -251,6 +251,9 @@ FROM python:3.12.10-slim-bookworm
 # System dependencies: gcc for dependencies building
 RUN apt-get update && apt-get install -y --no-install-recommends gcc
 
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
+
 WORKDIR /app
 
 # LAYER 1: heavy dependencies, rarely updated
@@ -264,7 +267,9 @@ RUN pip install -r requirements.txt
 # LAYER 3: source code
 COPY src src
 
-CMD ["uvicorn", "main:app"]
+EXPOSE 8000
+
+CMD ["uvicorn", "src.main:app"]
 ```
 
 This is a very common structure where the dependencies are installed in 3 separate `cache layers`. It allows us to modify the light dependencies and the source code without invalidating the heavy dependencies layer, which **takes a long time to build**.
@@ -336,9 +341,66 @@ To address this issue, we can use [multi-stage build](https://docs.docker.com/bu
 
 The legacy `Dockerfile` would be as follows:
 
+```dockerfile
+FROM python:3.12.10-slim-bookworm AS builder
+
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /packages
+
+RUN apt-get update && apt-get install -y --no-install-recommends gcc
+
+# Build dependencies into separate folders
+COPY requirements-heavy.txt .
+RUN pip3 install --prefix=./heavy -r requirements-heavy.txt
+
+COPY requirements.txt .
+RUN pip3 install --prefix=./light -r requirements.txt
+
+
+# Final image without gcc
+FROM python:3.12.10-slim-bookworm
+
+ENV PYTHON_PATH=/usr/local
+
+WORKDIR /app
+
+# LAYER 1: heavy dependencies
+COPY --from=builder /packages/heavy ${PYTHON_PATH}
+
+# LAYER 2: light dependencies
+COPY --from=builder /packages/light ${PYTHON_PATH}
+
+# LAYER 3: source code
+COPY ./src ./src
+
+EXPOSE 8000
+
+CMD ["uvicorn", "src.main:app"]
+```
+
+And the uv-specific `Dockerfile`:
 
 ```dockerfile
-# Build stage
+# Multi-stage build to create a final image with multi-layer dependencies
+# 1st stage: generate requirements files
+FROM python:3.12.10-slim-bookworm AS generator
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Configure uv settings
+ENV UV_LINK_MODE=copy \
+    UV_LOCKED=1
+
+WORKDIR /packages
+
+# Generate requirements files for each group
+RUN --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv pip compile --emit-index-url --group heavy-rarely-updated -o requirements-heavy.txt \
+    && uv pip compile --emit-index-url --group light-frequently-updated -o requirements-light.txt
+
+# 2nd stage: build dependencies into separate folders
 FROM python:3.12.10-slim-bookworm AS builder
 
 # Install build dependencies: gcc and uv
@@ -346,38 +408,39 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 # Configure uv settings
-ENV UV_PYTHON_DOWNLOADS=0 \
-	UV_COMPILE_BYTECODE=1 \
-	UV_LINK_MODE=copy \
-	UV_LOCKED=1
+ENV UV_PYTHON_DOWNLOADS=0
 
 WORKDIR /packages
 
-# Install dependencies in separate layers
-RUN --mount=type=cache,target=/root/.cache/uv \
-	--mount=type=bind,source=uv.lock,target=uv.lock \
-	--mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-	env UV_PROJECT_ENVIRONMENT=./heavy uv sync --no-install-project --no-dev --only-group heavy-rarely-updated && \
-	env UV_PROJECT_ENVIRONMENT=./light uv sync --no-install-project --no-dev --only-group light-frequently-updated
+COPY --from=generator /packages/requirements-heavy.txt ./
+RUN uv pip install --prefix=./heavy --no-deps -r requirements-heavy.txt
+
+COPY --from=generator /packages/requirements-light.txt .
+RUN uv pip install --prefix=./light --no-deps -r requirements-light.txt
+
 
 # Final image without gcc and uv
 FROM python:3.12.10-slim-bookworm
 
+ENV PYTHON_PATH=/usr/local
+
 WORKDIR /app
 
-ENV VENV_PATH=/app/.venv/
+# LAYER 1: heavy dependencies
+COPY --from=builder /packages/heavy ${PYTHON_PATH}
 
-# Copy dependencies in separate layers
-COPY --from=builder /packages/heavy $VENV_PATH
-COPY --from=builder /packages/light $VENV_PATH
+# LAYER 2: light dependencies
+COPY --from=builder /packages/light ${PYTHON_PATH}
 
-# Source code
-COPY src src
+# LAYER 3: source code
+COPY ./src ./src
 
-ENV PATH="$VENV_PATH/bin:$PATH"
+EXPOSE 8000
 
-CMD ["uvicorn", "main:app"]
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
+
+There are 3 stages in the `uv` approach instead of 2 as in the legacy `Dockerfile`. If you look closely, the final stages are exactly the same, while the intermediate stages are different.
 
 The biggest difference here is the use of environment variable `UV_PROJECT_ENVIRONMENT`. It is an official [uv configuration](https://docs.astral.sh/uv/concepts/projects/config/#project-environment-path), which is somewhat equivalent to the [`pip --prefix` option](https://pip.pypa.io/en/stable/cli/pip_install/#cmdoption-prefix). By customize this value, we can install each dependencies group into a separate directory, which is then copied to the final image, each copy being a separate layer.
 
@@ -394,12 +457,12 @@ Now let's compare the difference between approaches with actual data. For each a
 5. Cold pull: pull the cold built image from the registry
 6. Hot pull: pull the hot built image from the registry
 
-| Approach   | Legacy   | Single layer | Multi-layer | Multi-stage |
-| ---------- | -------- | ------------ | ----------- | ----------- |
-| Cold build | 499.92s  | 362.73s      | 273.51s     | 296.93s     |
-| Hot build  | 5.936s   | 152.22s      | 165.40s     | 278.05s     |
-| Cold push  | 19.37s   | 7.87s        | 54.39s      | 13.32s      |
-| Hot push   | 0.97s    | 7.93s        | 50.63s      | 34.99s      |
-| Image Size | 15.17 GB | 9.13 GB      | 9.13 GB     | 8.81 GB     |
+| Approach   | pip single | pip multi | uv single | uv multi |
+| ---------- | ---------- | --------- | --------- | -------- |
+| Cold build | 268.98s    | 287.51s   | 273.51s   | 241.45s  |
+| Hot build  | 4.75s      | 14.90s    | 165.40s   | 8.61s    |
+| Cold push  | 9.26s      | 7.09s     | 54.39s    | 8.60s    |
+| Hot push   | 1.03s      | 0.93s     | 50.63s    | 1.02s    |
+| Image Size | 9.09 GB    | 8.81 GB   | 9.13 GB   | 8.66 GB  |
 
 # Conclusion
