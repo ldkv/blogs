@@ -16,7 +16,11 @@ WORKDIR /packages
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    env UV_PROJECT_ENVIRONMENT=./heavy uv sync --no-install-project --no-dev --only-group heavy-rarely-updated && \
+    env UV_PROJECT_ENVIRONMENT=./heavy uv sync --no-install-project --no-dev --only-group heavy-rarely-updated
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     env UV_PROJECT_ENVIRONMENT=./light uv sync --no-install-project --no-dev --only-group light-frequently-updated
 
 # Final image without gcc and uv

@@ -1,0 +1,27 @@
+FROM python:3.12.10-slim-bookworm as builder
+
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /packages
+
+RUN apt-get update && apt-get install -y --no-install-recommends gcc
+
+COPY requirements-heavy.txt requirements.txt ./
+RUN pip3 install --prefix=./heavy -r requirements-heavy.txt && \
+    pip3 install --prefix=./light -r requirements.txt
+
+# Final image
+FROM python:3.12.10-slim-bookworm
+
+ENV PYTHON_PATH=/usr/local
+
+WORKDIR /app
+
+COPY --from=builder /packages/heavy ${PYTHON_PATH}
+COPY --from=builder /packages/light ${PYTHON_PATH}
+COPY ./src ./src
+
+EXPOSE 8000
+
+CMD ["uvicorn", "src.main:app"]
