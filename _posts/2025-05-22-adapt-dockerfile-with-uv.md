@@ -71,7 +71,7 @@ As we can see in the [diagram above](#docker-lifecycle), the cache layers are pr
 Another important factor to consider is **the size of the image**. The smaller the image, the faster the `push` and `pull` processes, and the lower the storage cost.
 
 > This is particularly useful for remote machines with limited bandwidth or unstable Internet connection. It is a specific use case that I encountered at work, which inspired this post.
-> {: .prompt-warning }
+{: .prompt-warning }
 
 Now that the basics are covered, let's move on to the main content.
 
@@ -350,21 +350,55 @@ The biggest difference is the additional `generator` stage in the `uv` approach.
 
 # Comparison with actual data
 
-Now let's compare the difference between approaches with actual data. For each approach (including the legacy one), I will excecute the following steps and measure the execution time:
+Now it's time to test the 4 approaches with actual data, let's name them: `pip-single`, `uv-single`, `pip-multi` and `uv-multi`.
 
-1. Cold build: build the image from scratch
-2. Cold push: push the cold built image to the registry
-3. Hot build: build the image again with a dependency update in `light-frequently-updated` group
-4. Hot push: push the hot built image to the registry
-5. Cold pull: pull the cold built image from the registry
-6. Hot pull: pull the hot built image from the registry
+For each approach, I will execute the following steps and measure the execution time, as well as the image size.
 
-| Approach   | pip single | pip multi | uv single | uv multi |
-| ---------- | ---------- | --------- | --------- | -------- |
-| Cold build | 268.98s    | 287.51s   | 244.29s   | 241.45s  |
-| Hot build  | 4.75s      | 14.90s    | 153.01s   | 8.61s    |
-| Cold push  | 9.26s      | 7.09s     | 8.33s     | 8.60s    |
-| Hot push   | 1.03s      | 0.93s     | 7.95s     | 1.02s    |
-| Image Size | 9.09 GB    | 8.81 GB   | 9.13 GB   | 8.66 GB  |
+1. **Cold build**: build the image from scratch
+
+```shell
+time docker build -f Dockerfile-uv-multi -t localhost:5000/test-repo:uv-multi-cold .
+```
+
+2. **Hot build**: build the image again with a small dependency update to `light-frequently-updated` group. This will allow us to verify the `heavy-rarely-updated` cache layer invalidation mechanism.
+
+```shell
+time docker build -f Dockerfile-uv-multi -t localhost:5000/test-repo:uv-multi-hot .
+```
+
+3. **Cold push**: push the cold built image to the local registry
+
+4. **Hot push**: push the hot built image to the local registry
+
+```shell
+docker run -d -p 5000:5000 --name registry registry:latest
+time docker push localhost:5000/test-repo:uv-multi-cold
+time docker push localhost:5000/test-repo:uv-multi-hot
+```
+
+It is not necessary to include the `pull` process, since the layers are identical to the `push` step and the results should be roughly the same.
+
+In between each approach, I will reset the local registry and the docker caches to simulate a cold start.
+
+```shell
+docker stop registry
+docker system prune -a --volumes
+```
+
+Without further ado, here are the results.
+
+| Approach       | pip-single | pip-multi | uv-single | uv-multi |
+| -------------- | ---------- | --------- | --------- | -------- |
+| **Cold build** | 268.98s    | 287.51s   | 244.29s   | 241.45s  |
+| **Hot build**  | 4.75s      | 14.90s    | 153.01s   | 8.61s    |
+| **Cold push**  | 9.26s      | 7.09s     | 8.33s     | 8.60s    |
+| **Hot push**   | 1.03s      | 0.93s     | 7.95s     | 1.02s    |
+| **Image Size** | 9.09 GB    | 8.81 GB   | 9.13 GB   | 8.66 GB  |
+
+As expected, the `uv-multi` approach is the fastest and the smallest in terms of image size, thanks to `uv` speed and optimized lock file.
+
+The `uv-single` method is also fast during a **cold build**, but struggles with the **hot build** and **hot push** steps, which is also expected since the whole dependencies layer is invalidated.
+
+The `pip-single` method wins the **hot build** step due to the nature of single-stage build.
 
 # Conclusion

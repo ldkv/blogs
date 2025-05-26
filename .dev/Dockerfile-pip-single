@@ -1,7 +1,9 @@
 FROM python:3.12.10-slim-bookworm
 
 # System dependencies: gcc for dependencies building
-RUN apt-get update && apt-get install -y --no-install-recommends gcc
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gcc \
+    && rm -rf /var/lib/apt/lists/*
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1
