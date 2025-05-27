@@ -34,27 +34,22 @@ There are 3 primary stages in the Docker workflow:
 ```mermaid
 flowchart LR
     A((Dev)) --> B[Build]
-    B[Build] --> |Layer 1| C((Dev))
-    B[Build] --> |Layer 2| C((Dev))
-    B[Build] --> |Layer 3| C((Dev))
+    B --> |Layer 1| C
+    B --> |Layer 2| C
+    B --> |Layer 3| C
     C((Dev)) --> D[Push]
-    D[Push] e1@--> |Layer 1| E((Docker registry))
-    D[Push] e2@--> |Layer 2| E((Docker registry))
-    D[Push] e3@--> |Layer 3| E((Docker registry))
+    D --> |Layer 1| E
+    D --> |Layer 2| E
+    D --> |Layer 3| E
     E((Docker registry)) --> F[Pull]
-    F[Pull] e4@--> |Layer 1| G((Production))
-    F[Pull] e5@--> |Layer 2| G((Production))
-    F[Pull] e6@--> |Layer 3| G((Production))
+    F --> |Layer 1| G
+    F --> |Layer 2| G
+    F --> |Layer 3| G
+    G((Production))
     style A fill:#0f0,color:#333
     style C fill:#0f0,color:#333
     style E fill:#fff,color:#333
     style G fill:#ff0,color:#333
-    e1@{animation: fast }
-    e2@{animation: fast }
-    e3@{animation: fast }
-    e4@{animation: fast }
-    e5@{animation: fast }
-    e6@{animation: fast }
 ```
 
 <div style="text-align: center">
@@ -84,6 +79,8 @@ In this section, we will cover 2 scenarios and how to adapt the `Dockerfile` wit
 2. [Multi-layer dependencies with multi-stage builds](#multi-layer-dependencies-with-multi-stage-builds)
 
 But first, let's define an example project and go through some minimal steps to migrate it to `uv`.
+
+The example project and all Dockerfiles can be found on my [repository](https://github.com/ldkv/blogs/tree/main/.dev).
 
 ## Migrate existing project to uv via pyproject.toml
 
@@ -234,7 +231,7 @@ Even though quite efficient, this approach is **NOT** an equivalent adaptation o
 
 As far as I know, **it is impossible to achieve multi-layer dependencies in a single-stage build** using a single `pyproject.toml` as with multiple requirements files.
 
-Fortunately, we can use [multi-stage build](https://docs.docker.com/build/building/multi-stage/) technique to achieve this.
+Fortunately, we can use [multi-stage builds](https://docs.docker.com/build/building/multi-stage/) technique to achieve this.
 
 ## Multi-layer dependencies with multi-stage build
 
@@ -385,7 +382,7 @@ docker stop registry
 docker system prune -a --volumes
 ```
 
-Here are the final results.
+Here are the final results (<span style="color:green">lower</span> is better).
 
 | Approach       | pip-single                             | pip-multi                              | uv-single | uv-multi                                 |
 | -------------- | -------------------------------------- | -------------------------------------- | --------- | ---------------------------------------- |
