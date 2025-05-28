@@ -5,7 +5,7 @@ date: 2025-05-27 00:00 +0200
 mermaid: true
 ---
 
-# Introduction
+## Introduction
 
 [uv](https://docs.astral.sh/uv/) is a modern, fast Python package and project manager. It is arguably the best thing that has happened to the Python ecosystem in recent years.
 
@@ -19,11 +19,11 @@ For that purpose, the uv documentation already provides a very comprehensive [gu
 
 This post is dedicated to an edge case that is not detailed in the documentation: **generating multi-layer dependencies for a Docker image to optimize the Docker workflow from development to production.**
 
-# Docker lifecycle and Dockerfile
+## Docker lifecycle and Dockerfile
 
 Before diving into the main content, I'll first explain the importance of writing a good `Dockerfile` and how it affects each stage in the Docker lifecycle. If you are already familiar with Docker and its core concepts, you can skip straight to the [main course](#dockerfile-with-uv).
 
-## Docker lifecycle
+### Docker lifecycle
 
 There are 3 primary stages in the Docker workflow:
 
@@ -56,7 +56,7 @@ flowchart LR
 <i>Simplified Docker lifecycle</i>
 </div>
 
-## What is a Dockerfile?
+### What is a Dockerfile?
 
 A `Dockerfile` is a text file that contains a series of instructions and commands to define the environment and dependencies of your application, which Docker follows to assemble the image layer by layer.
 
@@ -71,7 +71,7 @@ Another important factor to consider is **the size of the image**. The smaller t
 
 Now that the basics are covered, let's move on to the main content.
 
-# Dockerfile with uv
+## Dockerfile with uv
 
 In this section, we will cover 2 scenarios and how to adapt the `Dockerfile` with `uv` in each case.
 
@@ -82,7 +82,7 @@ But first, let's define an example project and go through some minimal steps to 
 
 The example project and all Dockerfiles can be found on my [repository](https://github.com/ldkv/blogs/tree/main/.dev).
 
-## Migrate existing project to uv via pyproject.toml
+### Migrate existing project to uv via pyproject.toml
 
 Consider a simple `FastAPI` project with the following requirements files:
 
@@ -136,7 +136,7 @@ However, this structure raises 2 obvious questions that affect the project's `Do
 
 We will try to answer these questions in the following sections.
 
-## Multi-layer dependencies within a single-stage build
+### Multi-layer dependencies within a single-stage build
 
 Let's consider this legacy `Dockerfile` that uses `pip` to install the Python dependencies.
 
@@ -233,7 +233,7 @@ As far as I know, **it is impossible to achieve multi-layer dependencies in a si
 
 Fortunately, we can use [multi-stage builds](https://docs.docker.com/build/building/multi-stage/) technique to achieve this.
 
-## Multi-layer dependencies with multi-stage build
+### Multi-layer dependencies with multi-stage build
 
 As you must have noticed, both approaches above are rather wasteful in terms of image size, as they must install `gcc` in system packages, and `uv` itself is not needed either during runtime.
 
@@ -345,7 +345,7 @@ The builder and final stages are quite similar. Both approaches make use of the 
 
 This approach adds a new layer of complexity to the Dockerfile, but is it worth it? Let's find out with some actual data.
 
-# Speed and image size comparison
+## Speed and image size comparison
 
 Now it's time to test the 4 approaches with actual data. Let's name them: `pip-single`, `uv-single`, `pip-multi`, and `uv-multi`.
 
@@ -398,7 +398,7 @@ The `uv-single` method is also fast during a **cold build**, but struggles with 
 
 The `pip-single` method wins the **hot build** step due to the nature of single-stage build. While the `pip-multi` is slowest during the **cold build** step, it is the fastest during the `push` stages, however the results are not far off from other approaches.
 
-# Conclusion
+## Conclusion
 
 The `uv-multi` approach is the clear winner in terms of speed and image size, but it requires a bit more effort to set up, which results in a more complex Dockerfile. I would recommend this approach for large projects with many heavy dependencies such as `torch` or `tensorrt`.
 
