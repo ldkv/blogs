@@ -7,9 +7,9 @@ mermaid: true
 
 ## Introduction
 
-As a daily Django user, I often run into the need to filter on multiple columns with a tuple of values. For a long time, there was no built-in support in Django ORM for this use case, and developers have to come up with workarounds to achieve the desired result.
+As a daily Django user, I often encounter the need to filter on multiple columns with a tuple of values. For a long time, there was no built-in support in Django ORM for this use case, and developers had to come up with workarounds to achieve the desired result.
 
-In this post, I will discuss some of the common workarounds, then present a solution that was "shadow" released together with [Django 5.2](https://docs.djangoproject.com/en/5.2/releases/5.2/), but has not been made public yet.
+In this post, I will discuss some common workarounds, then present a solution that was "shadow" released together with [Django 5.2](https://docs.djangoproject.com/en/5.2/releases/5.2/), but has not been made public yet.
 
 I will also dedicate a section to run some benchmarks (with code) to compare the performance of the different solutions using a PostgreSQL database.
 
@@ -116,7 +116,7 @@ The generated SQL query should be identical to the desired query.
 
 ### To bench or not to bench
 
-At this point, the first question that comes to mind is which solution should we use? Naturally we would want the best performing solution. However all solutions generate the same or equivalent SQL query, so theoretically the performance should be roughly identical. In real-world scenarios, would we see any difference?
+At this point, the first question that comes to mind is which solution should we use? Naturally, we would want the best performing solution. However, all solutions generate the same or equivalent SQL query, so theoretically the performance should be roughly identical. In real-world scenarios, would we see any difference?
 
 The only way to know is to run some benchmarks.
 
@@ -248,7 +248,7 @@ class ExperimentBase(models.Model):
             logger.info(f"Number to create remaining: {number_to_create}")
 ```
 
-The `bulk_generate_rows` method will generate rows until the table reach its maximum number of rows.
+The `bulk_generate_rows` method will generate rows until the table reaches its maximum number of rows.
 
 To execute the generation, we will use a simple management command that will loop through all the submodels and call the `bulk_generate_rows` method.
 
@@ -273,10 +273,10 @@ class Command(BaseCommand):
 
 ```
 
-This implementation allows to interrupt and resume the generation at any time, which is useful since the process will take quite a while to complete (around 10 minutes for 5 million rows on my machine).
+This implementation allows interrupting and resuming the generation at any time, which is useful since the process will take quite a while to complete (around 10 minutes for 5 million rows on my machine).
 
 > It is possible to "cheat" the process by using pure SQL to duplicate the table from an existing one, for example:
-{: .prompt-info }
+{: .prompt-tip }
 
 ```sql
 INSERT INTO experiments_experiment10m (first_name, last_name, age, email, created_at)
@@ -294,7 +294,7 @@ PostgreSQL uses an internal caching mechanism ([shared buffers](https://www.educ
 
 To minimize the impact of this mechanism on the results, we will have to generate a new list of input tuples for each test / run.
 
-Additionally, to simulate real-world scenario, we will generate a ratio of `90%` real inputs (existing data from the table) and `10%` fake inputs. The real inputs will be selected from a random range of the table, and the fake inputs will be generated randomly with `Faker`.
+Additionally, to simulate real-world scenarios, we will generate a ratio of `90%` real inputs (existing data from the table) and `10%` fake inputs. The real inputs will be selected from a random range of the table, and the fake inputs will be generated randomly with `Faker`.
 
 The following method will generate input tuples for `first_name` and `last_name` columns:
 
@@ -404,20 +404,20 @@ Without further ado, let's dive into the results!
 ![1000 tuples](/assets/img/posts/2025-05-01-tuples-filter-on-multi-columns-with-django-orm/performance-comparison-input1000.png)
 
 > I had to abort the experiments for 1000 tuples on 4 columns, because it was taking too long to complete at this point (24 hours!).
-{: .prompt-info }
+{: .prompt-warning }
 
 ### Observations
 
 -   Tuples wins in **30/44** test scenarios
--   The performance difference is quite minimal, within `5%` for **30/44** scenarios. However there were some big anomalies,for example in [200 tuples](#input-size-200-tuples) test cases.
--   The input size have a big impact on the performance, in the worst case scenario (50M rows), the difference between 100 vs. 200 / 500 / 1000 tuples is 6x / 30x / 100x respectively.
--   The additional column have a much bigger impact on performance for larger tables, from 10M rows and above. The lack of composite index in 3 and 4 columns might also plays a role here.
+-   The performance difference is quite minimal, within `5%` for **30/44** scenarios. However, there were some big anomalies, for example in [200 tuples](#input-size-200-tuples) test cases.
+-   The input size has a big impact on the performance. In the worst case scenario (50M rows), the difference between 100 vs. 200 / 500 / 1000 tuples is 6x / 30x / 100x respectively.
+-   The additional column has a much bigger impact on performance for larger tables, from 10M rows and above. The lack of composite index in 3 and 4 columns might also play a role here.
 
 ## Conclusion
 
 Even though the performance difference is pretty minimal, it is pretty safe to say that the Tuples method is the clear winner here. This difference could be explained by the fact that the resulting query is smaller with the Tuples method, thus is faster to transfer to the database server for execution.
 
-Beside better performance, the Tuples method has become a built-in feature in Django 5.2, which renders the code much cleaner and easier to maintain. However, it is still not recommended to use it in production, as the feature hasn't been officially released, and there might be some edge cases that are not yet covered.
+Besides better performance, the Tuples method has become a built-in feature in Django 5.2, which renders the code much cleaner and easier to maintain. However, it is still not recommended to use it in production, as the feature hasn't been officially released, and there might be some edge cases that are not yet covered.
 
 The experiment might not be perfect, but I do enjoy the process of building the benchmark and testing various theories I have in mind about Django ORM and PostgreSQL. It took me a whole day to complete _almost_ all the test scenarios, which was not wasted time since it allowed me to plot the graphs and finish writing this very post.
 
