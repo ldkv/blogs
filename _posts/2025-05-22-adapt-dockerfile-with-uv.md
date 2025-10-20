@@ -89,19 +89,19 @@ Consider a simple `FastAPI` project with the following requirements files:
 -   `requirements-heavy.txt` with heavy packages that take a long time to install but rarely need to be updated:
 
 ```
-torch==2.7.0
+torch==2.9.0
 ```
 
 -   `requirements.txt` with light packages that are frequently updated:
 
 ```
-fastapi==0.115.12
-uvicorn==0.34.2
+fastapi==0.119.1
+uvicorn==0.38.0
 ```
 
 To migrate the project to `uv`, we can simply create a `pyproject.toml` as below.
 
-```toml
+```
 [project]
 name = "test-docker"
 version = "0.0.0"
@@ -109,8 +109,8 @@ requires-python = "==3.12.*"
 dependencies = []
 
 [dependency-groups]
-heavy-rarely-updated = ["torch==2.7.0"]
-light-frequently-updated = ["fastapi==0.115.12", "uvicorn==0.34.2"]
+heavy-rarely-updated = ["torch==2.9.0"]
+light-frequently-updated = ["fastapi==0.119.1", "uvicorn==0.38.0"]
 
 [tool.uv]
 default-groups = ["heavy-rarely-updated", "light-frequently-updated"]
