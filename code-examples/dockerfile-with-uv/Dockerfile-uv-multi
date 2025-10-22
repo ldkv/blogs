@@ -1,0 +1,49 @@
+ARG PYTHON_IMAGE=python:3.12-slim
+
+FROM ghcr.io/astral-sh/uv:latest AS uv-base
+
+# 1. Generator stage: generate requirements files
+FROM ${PYTHON_IMAGE} AS generator
+
+# Configure uv settings
+ENV UV_LOCKED=1
+
+WORKDIR /packages
+
+# Generate requirements files for each group
+RUN --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    --mount=from=uv-base,source=/uv,target=/bin/uv \
+    uv pip compile --emit-index-url --group heavy-rarely-updated -o requirements-heavy.txt \
+    && uv pip compile --emit-index-url --group light-frequently-updated -o requirements-light.txt
+
+# 2. Final image without uv
+FROM ${PYTHON_IMAGE}
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV UV_SYSTEM_PYTHON=1 \
+    UV_LINK_MODE=copy
+
+WORKDIR /app
+
+# LAYER 1: heavy dependencies
+RUN --mount=from=uv-base,source=/uv,target=/bin/uv \
+    --mount=type=cache,target=/root/.cache/uv \
+    --mount=from=generator,source=/packages/requirements-heavy.txt,target=/app/requirements-heavy.txt \
+    uv pip install -r requirements-heavy.txt
+
+# LAYER 2: light dependencies
+RUN --mount=from=uv-base,source=/uv,target=/bin/uv \
+    --mount=type=cache,target=/root/.cache/uv \
+    --mount=from=generator,source=/packages/requirements-light.txt,target=/app/requirements-light.txt \
+    uv pip install -r requirements-light.txt
+
+# LAYER 3: source code
+COPY ./src ./src
+
+EXPOSE 8000
+
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -7,6 +7,10 @@ mermaid: true
 
 ## Introduction
 
+> This post has been updated on 2025-10-23 with much more optimized solution for `Dockerfile-uv-multi` build. It also links to the existing Dockerfile examples instead of duplicating the content.
+> The complete changelog can be found in this [PR](https://github.com/ldkv/blogs/pull/7).
+{: .prompt-warning }
+
 [uv](https://docs.astral.sh/uv/) is a modern, fast Python package and project manager. It is arguably the best thing that has happened to the Python ecosystem in recent years.
 
 Before its arrival, I had to use a combination of multiple tools to manage a project's dependencies and environments, such as `pip`, `venv`, `pyenv`, `poetry`, etc. Setting up a development environment for a new project required multiple steps, which was quite error-prone. `uv` is a single tool that replaces all of them, and I don't even need Python installed on my machine to use it.
@@ -80,7 +84,7 @@ In this section, we will cover 2 scenarios and how to adapt the `Dockerfile` wit
 
 But first, let's define an example project and go through some minimal steps to migrate it to `uv`.
 
-The example project and all Dockerfiles can be found on my [repository](https://github.com/ldkv/blogs/tree/main/.dev).
+The example project and all Dockerfiles can be found on my [repository](https://github.com/ldkv/blogs/tree/main/code-examples/dockerfile-with-uv).
 
 ### Migrate existing project to uv via pyproject.toml
 
@@ -138,94 +142,11 @@ We will try to answer these questions in the following sections.
 
 ### Multi-layer dependencies within a single-stage build
 
-Let's consider this legacy `Dockerfile` that uses `pip` to install the Python dependencies.
-
-```dockerfile
-FROM python:3.12.10-slim-bookworm
-
-# System dependencies: gcc for dependencies building
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends gcc \
-    && rm -rf /var/lib/apt/lists/*
-
-ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PIP_NO_CACHE_DIR=1
-
-WORKDIR /app
-
-# LAYER 1: heavy dependencies, rarely updated
-COPY requirements-heavy.txt .
-RUN pip install -r requirements-heavy.txt
-
-# LAYER 2: light dependencies, frequently updated
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-
-# LAYER 3: source code
-COPY src src
-
-EXPOSE 8000
-
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
+Let's consider this [legacy Dockerfile](https://github.com/ldkv/blogs/blob/main/code-examples/dockerfile-with-uv/Dockerfile-pip-single) that uses `pip` to install the Python dependencies.
 
 This is a very common structure where the dependencies are installed in 3 separate `cache layers`. It allows us to modify the light dependencies and the source code without invalidating the heavy dependencies layer, which **takes a long time to build**.
 
-The adaptation for this case is covered in the uv [documentation](https://docs.astral.sh/uv/guides/integration/docker/#intermediate-layers) and [example](https://github.com/astral-sh/uv-docker-example/blob/main/Dockerfile) as below.
-
-```dockerfile
-FROM python:3.12.10-slim-bookworm
-
-# System dependencies should be the first layer before uv since they might be heavier and less likely to change.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends gcc \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy uv binary from the official image instead of using base image with uv pre-installed.
-# It allows to use the same image as before migration, and only install uv when needed.
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-
-WORKDIR /app
-
-# Force uv to use system Python instead of downloading it
-ENV UV_PYTHON_DOWNLOADS=0
-
-# Enable bytecode compilation to speed up the startup time
-ENV UV_COMPILE_BYTECODE=1
-
-# Copy from the cache instead of linking since it's a mounted volume
-ENV UV_LINK_MODE=copy
-
-# Force the build to fail if the auto-generated lock is not up to date
-ENV UV_LOCKED=1
-
-# LAYER 1 + 2: install HEAVY and LIGHT dependencies
-# 1. The cache is mounted to avoid re-downloading the dependencies if the lock file is not updated.
-# 2. The pyproject.toml and uv.lock files are bind-mounted which prevents the build from being invalidated by unrelated changes.
-# 3. The --no-install-project flag is used to avoid installing the project as a package, since the source code has not been copied yet.
-# 4. The --no-dev flag is used to avoid installing the development dependencies.
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --no-install-project --no-dev
-
-# LAYER 3: source code
-COPY src src
-
-# Place executables in the environment at the front of the path
-ENV PATH="/app/.venv/bin:$PATH"
-
-EXPOSE 8000
-
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
-
-Most of the comments are self-explanatory. In particular, we combined 2 Docker techniques to optimize the dependencies layer:
-
--   [bind mount](https://docs.docker.com/build/cache/optimize/#use-bind-mounts): links `pyproject.toml` and `uv.lock` from the host machine to the container for temporary use **without generating any layer**. If `COPY` is used here, it would **generate a layer** that would be invalidated by any changes to the files.
--   [cache mount](https://docs.docker.com/build/cache/optimize/#use-cache-mounts): persists the uv cache for packages installation across builds, so even if the layer is rebuilt, only new or changed packages are downloaded.
-
-Thus, this layer will only be invalidated if changes are made to the dependencies. Even so, it won't have to redownload everything, since the cache is mounted.
+The [adaptation](https://github.com/ldkv/blogs/blob/main/code-examples/dockerfile-with-uv/Dockerfile-uv-single) for this case is covered in the uv [documentation](https://docs.astral.sh/uv/guides/integration/docker/#intermediate-layers) and [example](https://github.com/astral-sh/uv-docker-example/blob/main/Dockerfile). Most of the comments are self-explanatory.
 
 Even though quite efficient, this approach is **NOT** an equivalent adaptation of the legacy `Dockerfile`, since the layers will be invalidated by dependency changes no matter what.
 
@@ -239,105 +160,9 @@ As you must have noticed, both approaches above are rather wasteful in terms of 
 
 To address this issue, we can use [multi-stage build](https://docs.docker.com/build/building/multi-stage/) to install the dependencies in a separate stage, then copy the built packages to the final image.
 
-The legacy `Dockerfile` would be as follows:
+The legacy `Dockerfile` can be found [here](https://github.com/ldkv/blogs/blob/main/code-examples/dockerfile-with-uv/Dockerfile-pip-multi).
 
-```dockerfile
-# 1. Builder stage: build dependencies into separate folders
-FROM python:3.12.10-slim-bookworm AS builder
-
-ENV PIP_DISABLE_PIP_VERSION_CHECK=1
-
-WORKDIR /packages
-
-RUN apt-get update && apt-get install -y --no-install-recommends gcc
-
-COPY requirements-heavy.txt .
-RUN pip3 install --prefix=./heavy -r requirements-heavy.txt
-
-COPY requirements.txt .
-RUN pip3 install --prefix=./light -r requirements.txt
-
-
-# 2. Final image without gcc
-FROM python:3.12.10-slim-bookworm
-
-ENV PYTHON_PATH=/usr/local
-
-WORKDIR /app
-
-# LAYER 1: heavy dependencies
-COPY --from=builder /packages/heavy ${PYTHON_PATH}
-
-# LAYER 2: light dependencies
-COPY --from=builder /packages/light ${PYTHON_PATH}
-
-# LAYER 3: source code
-COPY ./src ./src
-
-EXPOSE 8000
-
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
-
-And the uv-specific `Dockerfile`:
-
-```dockerfile
-# 1. Generator stage: generate requirements files
-FROM python:3.12.10-slim-bookworm AS generator
-
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-
-# Configure uv settings
-ENV UV_LINK_MODE=copy \
-    UV_LOCKED=1
-
-WORKDIR /packages
-
-# Generate requirements files for each group
-RUN --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv pip compile --emit-index-url --group heavy-rarely-updated -o requirements-heavy.txt \
-    && uv pip compile --emit-index-url --group light-frequently-updated -o requirements-light.txt
-
-# 2. Builder stage: build dependencies into separate folders
-FROM python:3.12.10-slim-bookworm AS builder
-
-# Install build dependencies: gcc and uv
-RUN apt-get update && apt-get install -y --no-install-recommends gcc
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-
-# Configure uv settings
-ENV UV_PYTHON_DOWNLOADS=0
-
-WORKDIR /packages
-
-COPY --from=generator /packages/requirements-heavy.txt ./
-RUN uv pip install --prefix=./heavy --no-deps -r requirements-heavy.txt
-
-COPY --from=generator /packages/requirements-light.txt .
-RUN uv pip install --prefix=./light --no-deps -r requirements-light.txt
-
-
-# 3. Final image without gcc and uv
-FROM python:3.12.10-slim-bookworm
-
-ENV PYTHON_PATH=/usr/local
-
-WORKDIR /app
-
-# LAYER 1: heavy dependencies
-COPY --from=builder /packages/heavy ${PYTHON_PATH}
-
-# LAYER 2: light dependencies
-COPY --from=builder /packages/light ${PYTHON_PATH}
-
-# LAYER 3: source code
-COPY ./src ./src
-
-EXPOSE 8000
-
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
+And the uv-specific `Dockerfile` [here](https://github.com/ldkv/blogs/blob/main/code-examples/dockerfile-with-uv/Dockerfile-uv-multi).
 
 The biggest difference is the additional `generator` stage in the `uv` approach. To achieve multi-layer dependencies with a single `pyproject.toml` file, we will have to fall back to regenerate the requirements. Fortunately, `uv` provides a convenient command to do so: [`uv pip compile`](https://docs.astral.sh/uv/reference/cli/#uv-pip-compile). The separate stage is **required** to guard the builder stage by any unrelated changes to the `pyproject.toml` file.
 
@@ -384,19 +209,17 @@ docker system prune -a --volumes
 
 Here are the final results (<span style="color:green">lower</span> is better).
 
-| Approach       | pip-single                             | pip-multi                              | uv-single | uv-multi                                 |
-| -------------- | -------------------------------------- | -------------------------------------- | --------- | ---------------------------------------- |
-| **Cold build** | 268.98s                                | 287.51s                                | 244.29s   | <span style="color:green">241.45s</span> |
-| **Hot build**  | <span style="color:green">4.75s</span> | 14.90s                                 | 153.01s   | 8.61s                                    |
-| **Cold push**  | 9.26s                                  | <span style="color:green">7.09s</span> | 8.33s     | 8.60s                                    |
-| **Hot push**   | 1.03s                                  | <span style="color:green">0.93s</span> | 7.95s     | 1.02s                                    |
-| **Image size** | 9.05 GB                                | 8.81 GB                                | 9.1 GB    | <span style="color:green">8.66 GB</span> |
+| Approach       | pip-single | pip-multi                              | uv-single | uv-multi                                  |
+| -------------- | ---------- | -------------------------------------- | --------- | ----------------------------------------- |
+| **Cold build** | 259.59s    | 278.44s                                | 242.21s   | <span style="color:green">257.29s</span>  |
+| **Hot build**  | 4.86s      | 16.07s                                 | 156.04s   | <span style="color:green">4.48s</span>    |
+| **Cold push**  | 10.69s     | 10.40s                                 | 11.42s    | <span style="color:green">10.28s</span>   |
+| **Hot push**   | 0.94s      | <span style="color:green">0.89s</span> | 9.84s     | 1.11s                                     |
+| **Image size** | 11.71 GB   | 11.55 GB                               | 11.53 GB  | <span style="color:green">11.53 GB</span> |
 
 As expected, the `uv-multi` approach is the fastest and the smallest in terms of image size, thanks to `uv` speed and optimized lock file.
 
 The `uv-single` method is also fast during a **cold build**, but struggles with the **hot build** and **hot push** steps, which is also expected since the whole dependencies layer is invalidated.
-
-The `pip-single` method wins the **hot build** step due to the nature of single-stage build. While the `pip-multi` is slowest during the **cold build** step, it is the fastest during the `push` stages, however the results are not far off from other approaches.
 
 ## Conclusion
 
