@@ -18,10 +18,10 @@ url = "https://api.pyx.dev/v1/upload/skynopy/main/"
 publish-url = "https://api.pyx.dev/v1/upload/skynopy/main"
 explicit = true
 
-# [[tool.uv.index]]
-# name = "pyx-pypi-mirror"
-# url = "https://api.pyx.dev/simple/pypi"
-# default = true
+[[tool.uv.index]]
+name = "pyx-pypi-mirror"
+url = "https://api.pyx.dev/simple/pypi"
+default = true
 
 
 [[tool.uv.index]]

@@ -33,6 +33,8 @@ light-frequently-updated = ["fastapi==0.120.1", "uvicorn==0.38.0"]
 
 ## Test mirror download speed
 
--   With Pyx registry: 27.72s
--   Without Pyx registry (default PyPI index): 43.43s 45.83s
--   
+### With torch - 5.77GB
+
+-   With Pyx registry: 27.72s 23.71s
+-   Without Pyx registry (default PyPI index): 43.43s 45.83s 44.02s
+-
